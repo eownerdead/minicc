@@ -5,3 +5,18 @@ version = 3
 [[package]]
 name = "ccom"
 version = "0.1.0"
+dependencies = [
+ "minicc_ast",
+ "minicc_parser",
+]
+
+[[package]]
+name = "minicc_ast"
+version = "0.1.0"
+
+[[package]]
+name = "minicc_parser"
+version = "0.1.0"
+dependencies = [
+ "minicc_ast",
+]
