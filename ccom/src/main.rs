@@ -18,6 +18,11 @@ fn main() {
 
 fn gen(node: &ast::Ast) {
     match &node.kind {
+        ast::AstKind::CompoundStmt(n) => {
+            for i in &n.items {
+                gen(i);
+            }
+        }
         ast::AstKind::IntLit(n) => {
             println!("	mov	${}, %eax", n.val);
         }

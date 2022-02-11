@@ -17,6 +17,9 @@ pub(crate) enum TokenKind {
     Percent,  // `%`
     LParen,   // `(`
     RParen,   // `)`
+    LBrace,   // `{`
+    RBrace,   // `}`
+    Semi,     // `;`
 
     Int(i64), // Integer literals e.g. `123`
 
@@ -33,6 +36,9 @@ impl std::fmt::Display for TokenKind {
             TokenKind::Percent => write!(f, "%"),
             TokenKind::LParen => write!(f, "("),
             TokenKind::RParen => write!(f, ")"),
+            TokenKind::LBrace => write!(f, "{{"),
+            TokenKind::RBrace => write!(f, "}}"),
+            TokenKind::Semi => write!(f, ";"),
             TokenKind::Int(x) => write!(f, "{}", x),
             TokenKind::Eof => write!(f, "EOF"),
         }
@@ -113,6 +119,27 @@ impl<'a> Scanner<'a> {
                 self.next_char();
                 Token {
                     kind: TokenKind::RParen,
+                    span: Span { start: Pos(begin), end: Pos(self.loc) },
+                }
+            }
+            Some('{') => {
+                self.next_char();
+                Token {
+                    kind: TokenKind::LBrace,
+                    span: Span { start: Pos(begin), end: Pos(self.loc) },
+                }
+            }
+            Some('}') => {
+                self.next_char();
+                Token {
+                    kind: TokenKind::RBrace,
+                    span: Span { start: Pos(begin), end: Pos(self.loc) },
+                }
+            }
+            Some(';') => {
+                self.next_char();
+                Token {
+                    kind: TokenKind::Semi,
                     span: Span { start: Pos(begin), end: Pos(self.loc) },
                 }
             }

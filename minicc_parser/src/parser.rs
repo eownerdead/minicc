@@ -5,7 +5,8 @@ use minicc_ast::AstKind;
 use super::scanner::{Token, TokenKind};
 
 pub(crate) fn parse(tok: &[Token]) -> Ast {
-    let (node, rest) = add(tok);
+    let rest = skip(tok, TokenKind::LBrace);
+    let (node, rest) = compound_stmt(rest);
     skip(rest, TokenKind::Eof);
 
     node
@@ -133,6 +134,51 @@ fn add_rhs(tok: &[Token], lhs: Ast) -> (Ast, &[Token]) {
     };
 
     add_rhs(rest, lhs)
+}
+
+/// ```ebnf
+/// stmt ::= "{" compound_stmt
+///        | add ";"
+/// ```
+fn stmt(tok: &[Token]) -> (Ast, &[Token]) {
+    let (t, rest) = next(tok);
+    if t.kind == TokenKind::LBrace {
+        compound_stmt(rest)
+    } else {
+        let (n, rest) = add(tok);
+        let rest = skip(rest, TokenKind::Semi);
+
+        (n, rest)
+    }
+}
+
+/// ```ebnf
+/// compound_stmt ::= stmt* "}"
+/// ```
+fn compound_stmt(tok: &[Token]) -> (Ast, &[Token]) {
+    let start = tok[0].span;
+
+    let mut rest = tok;
+    let mut item = Vec::new();
+    loop {
+        let (t, r) = next(rest);
+        if t.kind == TokenKind::RBrace {
+            rest = r;
+            break;
+        }
+
+        let (n, r) = stmt(rest);
+        rest = r;
+        item.push(n);
+    }
+
+    (
+        Ast {
+            kind: AstKind::CompoundStmt(ast::CompoundStmt { items: item }),
+            span: start.to(rest[0].span),
+        },
+        rest,
+    )
 }
 
 fn next(tok: &[Token]) -> (&Token, &[Token]) {

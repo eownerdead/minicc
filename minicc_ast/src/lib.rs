@@ -33,9 +33,15 @@ pub struct Ast {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AstKind {
+    CompoundStmt(CompoundStmt),
     IntLit(IntLit),
     UnOp(UnOp),
     BinOp(BinOp),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CompoundStmt {
+    pub items: Vec<Ast>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
