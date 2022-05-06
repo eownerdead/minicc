@@ -2,194 +2,209 @@ use ast::Ast;
 use minicc_ast as ast;
 use minicc_ast::AstKind;
 
-use super::scanner::{Token, TokenKind};
+use super::scanner::{Scanner, Token, TokenKind};
 
-pub(crate) fn parse(tok: &[Token]) -> Ast {
-    let rest = skip(tok, TokenKind::LBrace);
-    let (node, rest) = compound_stmt(rest);
-    skip(rest, TokenKind::Eof);
-
-    node
+pub(crate) struct Parser<'a> {
+    scanner: Scanner<'a>,
+    tok: Token,
 }
 
-/// ```ebnf
-/// primary ::= [0..9]+
-///           | "(" add ")"
-/// ```
-fn primary(tok: &[Token]) -> (Ast, &[Token]) {
-    let (t, rest) = next(tok);
-    match t.kind {
-        TokenKind::Int(x) => {
-            (
+impl<'a> Parser<'a> {
+    pub fn new(mut scanner: Scanner<'a>) -> Self {
+        let tok = scanner.next();
+
+        Self { scanner, tok }
+    }
+
+    pub fn parse(&mut self) -> Ast {
+        self.skip(&TokenKind::LBrace);
+        let node = self.compound_stmt();
+        self.skip(&TokenKind::Eof);
+
+        node
+    }
+
+    /// ```ebnf
+    /// primary ::= [0..9]+
+    ///           | "(" add ")"
+    /// ```
+    fn primary(&mut self) -> Ast {
+        let start = self.cur().span;
+
+        match self.cur().kind {
+            TokenKind::Int(x) => {
+                self.next();
                 Ast {
                     kind: AstKind::IntLit(ast::IntLit { val: x }),
-                    span: t.span,
-                },
-                rest,
-            )
-        }
-
-        TokenKind::LParen => {
-            let (node, rest) = add(rest);
-            let rest = skip(rest, TokenKind::RParen);
-
-            (node, rest)
-        }
-
-        _ => {
-            panic!(
-                "expected expression, found `{}` at {}",
-                t.kind, t.span.start.0
-            )
+                    span: start,
+                }
+            }
+            TokenKind::LParen => {
+                self.next();
+                let node = self.add();
+                self.skip(&TokenKind::RParen);
+                Ast { span: start.to(self.cur().span), ..node }
+            }
+            ref kind => {
+                panic!(
+                    "expected expression, found `{kind}` at {pos}",
+                    pos = start.start.0,
+                )
+            }
         }
     }
-}
 
-/// ```ebnf
-/// unary ::= ("+" | "-") unary
-///         | primary
-/// ```
-fn unary(tok: &[Token]) -> (Ast, &[Token]) {
-    let (t, rest) = next(tok);
-    match t.kind {
-        TokenKind::Plus => unary(rest),
+    /// ```ebnf
+    /// unary ::= ("+" | "-") unary
+    ///         | primary
+    /// ```
+    fn unary(&mut self) -> Ast {
+        let start = self.cur().span;
 
-        TokenKind::Minus => {
-            let (expr, rest) = unary(rest);
+        match self.cur().kind {
+            TokenKind::Plus => {
+                self.next();
+                let node = self.unary();
+                Ast { span: start.to(self.cur().span), ..node }
+            }
+            TokenKind::Minus => {
+                self.next();
+                let expr = self.unary();
 
-            (
                 Ast {
                     kind: AstKind::UnOp(ast::UnOp {
                         op: ast::OpUn::Neg,
                         expr: Box::new(expr),
                     }),
-                    span: t.span.to(rest[0].span),
-                },
-                rest,
-            )
+                    span: start.to(self.cur().span),
+                }
+            }
+
+            _ => self.primary(),
+        }
+    }
+
+    /// ```ebnf
+    /// mul ::= unary ("*" unary | "/" unary | "%" unary)*
+    /// ```
+    fn mul(&mut self) -> Ast {
+        let lhs = self.unary();
+        self.mul_rhs(lhs)
+    }
+
+    fn mul_rhs(&mut self, lhs: Ast) -> Ast {
+        let start = self.cur().span;
+
+        let op = match self.cur().kind {
+            TokenKind::Asterisk => ast::OpBin::Mul,
+            TokenKind::Slash => ast::OpBin::Div,
+            TokenKind::Percent => ast::OpBin::Mod,
+            _ => return lhs,
+        };
+        self.next();
+
+        let rhs = self.unary();
+
+        let lhs = Ast {
+            kind: AstKind::BinOp(ast::BinOp {
+                op,
+                lhs: Box::new(lhs),
+                rhs: Box::new(rhs),
+            }),
+            span: start.to(self.cur().span),
+        };
+
+        self.mul_rhs(lhs)
+    }
+
+    /// ```ebnf
+    /// add ::= mul ("+" mul | "-" mul)*
+    /// ```
+    fn add(&mut self) -> Ast {
+        let lhs = self.mul();
+        self.add_rhs(lhs)
+    }
+
+    fn add_rhs(&mut self, lhs: Ast) -> Ast {
+        let start = self.cur().span;
+
+        let op = match self.cur().kind {
+            TokenKind::Plus => ast::OpBin::Add,
+            TokenKind::Minus => ast::OpBin::Sub,
+            _ => return lhs,
+        };
+        self.next();
+
+        let rhs = self.mul();
+
+        let lhs = Ast {
+            kind: AstKind::BinOp(ast::BinOp {
+                op,
+                lhs: Box::new(lhs),
+                rhs: Box::new(rhs),
+            }),
+            span: start.to(self.cur().span),
+        };
+
+        self.add_rhs(lhs)
+    }
+
+    /// ```ebnf
+    /// stmt ::= "{" compound_stmt
+    ///        | add ";"
+    /// ```
+    fn stmt(&mut self) -> Ast {
+        if self.cur().kind == TokenKind::LBrace {
+            self.compound_stmt()
+        } else {
+            let node = self.add();
+            self.skip(&TokenKind::Semi);
+
+            node
+        }
+    }
+
+    /// ```ebnf
+    /// compound_stmt ::= stmt* "}"
+    /// ```
+    fn compound_stmt(&mut self) -> Ast {
+        let start = self.cur().span;
+
+        let mut item = Vec::new();
+        loop {
+            if self.cur().kind == TokenKind::RBrace {
+                self.next();
+                break;
+            }
+
+            let n = self.stmt();
+            item.push(n);
         }
 
-        _ => primary(tok),
-    }
-}
-
-/// ```ebnf
-/// mul ::= unary ("*" unary | "/" unary | "%" unary)*
-/// ```
-fn mul(tok: &[Token]) -> (Ast, &[Token]) {
-    let (lhs, rest) = unary(tok);
-
-    mul_rhs(rest, lhs)
-}
-
-fn mul_rhs(tok: &[Token], lhs: Ast) -> (Ast, &[Token]) {
-    let (t, rest) = next(tok);
-    let op = match t.kind {
-        TokenKind::Asterisk => ast::OpBin::Mul,
-        TokenKind::Slash => ast::OpBin::Div,
-        TokenKind::Percent => ast::OpBin::Mod,
-        _ => return (lhs, tok),
-    };
-
-    let (rhs, rest) = unary(rest);
-
-    let lhs = Ast {
-        kind: AstKind::BinOp(ast::BinOp {
-            op,
-            lhs: Box::new(lhs),
-            rhs: Box::new(rhs),
-        }),
-        span: tok[0].span.to(rest[0].span),
-    };
-
-    mul_rhs(rest, lhs)
-}
-
-/// ```ebnf
-/// add ::= mul ("+" mul | "-" mul)*
-/// ```
-fn add(tok: &[Token]) -> (Ast, &[Token]) {
-    let (lhs, rest) = mul(tok);
-
-    add_rhs(rest, lhs)
-}
-
-fn add_rhs(tok: &[Token], lhs: Ast) -> (Ast, &[Token]) {
-    let (t, rest) = next(tok);
-    let op = match t.kind {
-        TokenKind::Plus => ast::OpBin::Add,
-        TokenKind::Minus => ast::OpBin::Sub,
-        _ => return (lhs, tok),
-    };
-
-    let (rhs, rest) = mul(rest);
-
-    let lhs = Ast {
-        kind: AstKind::BinOp(ast::BinOp {
-            op,
-            lhs: Box::new(lhs),
-            rhs: Box::new(rhs),
-        }),
-        span: tok[0].span.to(rest[0].span),
-    };
-
-    add_rhs(rest, lhs)
-}
-
-/// ```ebnf
-/// stmt ::= "{" compound_stmt
-///        | add ";"
-/// ```
-fn stmt(tok: &[Token]) -> (Ast, &[Token]) {
-    let (t, rest) = next(tok);
-    if t.kind == TokenKind::LBrace {
-        compound_stmt(rest)
-    } else {
-        let (n, rest) = add(tok);
-        let rest = skip(rest, TokenKind::Semi);
-
-        (n, rest)
-    }
-}
-
-/// ```ebnf
-/// compound_stmt ::= stmt* "}"
-/// ```
-fn compound_stmt(tok: &[Token]) -> (Ast, &[Token]) {
-    let start = tok[0].span;
-
-    let mut rest = tok;
-    let mut item = Vec::new();
-    loop {
-        let (t, r) = next(rest);
-        if t.kind == TokenKind::RBrace {
-            rest = r;
-            break;
-        }
-
-        let (n, r) = stmt(rest);
-        rest = r;
-        item.push(n);
-    }
-
-    (
         Ast {
             kind: AstKind::CompoundStmt(ast::CompoundStmt { items: item }),
-            span: start.to(rest[0].span),
-        },
-        rest,
-    )
-}
+            span: start.to(self.cur().span),
+        }
+    }
 
-fn next(tok: &[Token]) -> (&Token, &[Token]) {
-    tok.split_first().unwrap()
-}
+    fn cur(&self) -> &Token {
+        &self.tok
+    }
 
-fn skip(tok: &[Token], kind: TokenKind) -> &[Token] {
-    let (t, rest) = next(tok);
-    if t.kind != kind {
-        panic!("expected `{}`, found `{}` at {}", kind, t.kind, t.span.start.0);
-    } else {
-        rest
+    fn next(&mut self) -> &Token {
+        self.tok = self.scanner.next();
+        self.cur()
+    }
+
+    fn skip(&mut self, kind: &TokenKind) {
+        if self.cur().kind != *kind {
+            panic!(
+                "expected `{expected}`, found `{found}` at {pos}",
+                expected = kind,
+                found = self.cur().kind,
+                pos = self.cur().span.start.0
+            );
+        }
+        self.next();
     }
 }
