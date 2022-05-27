@@ -1,3 +1,5 @@
+use std::process::exit;
+
 use ast::Ast;
 use minicc_ast as ast;
 use minicc_ast::AstKind;
@@ -46,10 +48,7 @@ impl<'a> Parser<'a> {
                 Ast { span: start.to(self.cur().span), ..node }
             }
             ref kind => {
-                panic!(
-                    "expected expression, found `{kind}` at {pos}",
-                    pos = start.start.0,
-                )
+                self.err(&format!("expected expression, found `{kind}`"));
             }
         }
     }
@@ -187,6 +186,11 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn err(&self, msg: &str) -> ! {
+        println!("{pos}: {msg}", pos = self.cur().span.start.0);
+        exit(1);
+    }
+
     fn cur(&self) -> &Token {
         &self.tok
     }
@@ -198,12 +202,11 @@ impl<'a> Parser<'a> {
 
     fn skip(&mut self, kind: &TokenKind) {
         if self.cur().kind != *kind {
-            panic!(
-                "expected `{expected}`, found `{found}` at {pos}",
+            self.err(&format!(
+                "expected `{expected}`, found `{found}`",
                 expected = kind,
                 found = self.cur().kind,
-                pos = self.cur().span.start.0
-            );
+            ));
         }
         self.next();
     }

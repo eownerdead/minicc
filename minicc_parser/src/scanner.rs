@@ -1,3 +1,4 @@
+use std::process::exit;
 use std::str::Chars;
 
 use minicc_ast::{Pos, Span};
@@ -150,7 +151,7 @@ impl<'a> Scanner<'a> {
                 }
             }
 
-            Some(c) => panic!("unknown token `{}` at {}", c, self.loc),
+            Some(c) => self.err(&format!("unknown token `{}`", c)),
         }
     }
 
@@ -168,6 +169,11 @@ impl<'a> Scanner<'a> {
         }
 
         s.parse().unwrap()
+    }
+
+    fn err(&self, msg: &str) -> ! {
+        println!("{pos}: {msg}", pos = self.loc);
+        exit(1);
     }
 
     fn next_char(&mut self) -> Option<char> {
