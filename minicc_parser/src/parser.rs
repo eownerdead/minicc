@@ -187,7 +187,7 @@ impl<'a> Parser<'a> {
     }
 
     fn err(&self, msg: &str) -> ! {
-        println!("{pos}: {msg}", pos = self.cur().span.start.0);
+        println!("{pos}: {msg}", pos = self.cur().span.start);
         exit(1);
     }
 

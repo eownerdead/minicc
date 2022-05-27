@@ -1,6 +1,14 @@
+use std::fmt::{Display, Formatter};
+
 /// Count of characters from the beginning of the source code.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Pos(pub usize);
+
+impl Display for Pos {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 /// Range of source code.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
