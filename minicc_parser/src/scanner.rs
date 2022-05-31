@@ -1,12 +1,10 @@
 use std::process::exit;
 use std::str::Chars;
 
-use minicc_ast::{Pos, Span};
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Token {
     pub kind: TokenKind,
-    pub span: Span,
+    pub loc: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -65,90 +63,51 @@ impl<'a> Scanner<'a> {
             self.next_char();
         }
 
-        let begin = self.loc;
         match self.peek_char() {
-            None => {
-                Token {
-                    kind: TokenKind::Eof,
-                    span: Span { start: Pos(self.loc), end: Pos(self.loc) },
-                }
-            }
+            None => Token { kind: TokenKind::Eof, loc: self.loc },
 
             Some('+') => {
                 self.next_char();
-                Token {
-                    kind: TokenKind::Plus,
-                    span: Span { start: Pos(begin), end: Pos(self.loc) },
-                }
+                Token { kind: TokenKind::Plus, loc: self.loc }
             }
             Some('-') => {
                 self.next_char();
-                Token {
-                    kind: TokenKind::Minus,
-                    span: Span { start: Pos(begin), end: Pos(self.loc) },
-                }
+                Token { kind: TokenKind::Minus, loc: self.loc }
             }
             Some('*') => {
                 self.next_char();
-                Token {
-                    kind: TokenKind::Asterisk,
-                    span: Span { start: Pos(begin), end: Pos(self.loc) },
-                }
+                Token { kind: TokenKind::Asterisk, loc: self.loc }
             }
             Some('/') => {
                 self.next_char();
-                Token {
-                    kind: TokenKind::Slash,
-                    span: Span { start: Pos(begin), end: Pos(self.loc) },
-                }
+                Token { kind: TokenKind::Slash, loc: self.loc }
             }
             Some('%') => {
                 self.next_char();
-                Token {
-                    kind: TokenKind::Percent,
-                    span: Span { start: Pos(begin), end: Pos(self.loc) },
-                }
+                Token { kind: TokenKind::Percent, loc: self.loc }
             }
             Some('(') => {
                 self.next_char();
-                Token {
-                    kind: TokenKind::LParen,
-                    span: Span { start: Pos(begin), end: Pos(self.loc) },
-                }
+                Token { kind: TokenKind::LParen, loc: self.loc }
             }
             Some(')') => {
                 self.next_char();
-                Token {
-                    kind: TokenKind::RParen,
-                    span: Span { start: Pos(begin), end: Pos(self.loc) },
-                }
+                Token { kind: TokenKind::RParen, loc: self.loc }
             }
             Some('{') => {
                 self.next_char();
-                Token {
-                    kind: TokenKind::LBrace,
-                    span: Span { start: Pos(begin), end: Pos(self.loc) },
-                }
+                Token { kind: TokenKind::LBrace, loc: self.loc }
             }
             Some('}') => {
                 self.next_char();
-                Token {
-                    kind: TokenKind::RBrace,
-                    span: Span { start: Pos(begin), end: Pos(self.loc) },
-                }
+                Token { kind: TokenKind::RBrace, loc: self.loc }
             }
             Some(';') => {
                 self.next_char();
-                Token {
-                    kind: TokenKind::Semi,
-                    span: Span { start: Pos(begin), end: Pos(self.loc) },
-                }
+                Token { kind: TokenKind::Semi, loc: self.loc }
             }
             Some(c) if c.is_ascii_digit() => {
-                Token {
-                    kind: TokenKind::Int(self.read_int()),
-                    span: Span { start: Pos(begin), end: Pos(self.loc) },
-                }
+                Token { kind: TokenKind::Int(self.read_int()), loc: self.loc }
             }
 
             Some(c) => self.err(&format!("unknown token `{}`", c)),

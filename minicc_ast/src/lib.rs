@@ -1,42 +1,7 @@
-use std::fmt::{Display, Formatter};
-
-/// Count of characters from the beginning of the source code.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Pos(pub usize);
-
-impl Display for Pos {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-/// Range of source code.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Span {
-    pub start: Pos,
-    pub end: Pos,
-}
-
-impl Span {
-    /// Return range from start of `self` to end of `other`.
-    ///
-    /// ```
-    /// use minicc_ast::Span;
-    ///
-    /// let start = Span { start: 6, end: 8 };
-    /// let end = Span { start: 12, end: 23 };
-    ///
-    /// assert_eq!(start.to(end), Span { start: 6, end: 23 });
-    /// ```
-    pub fn to(self, other: Self) -> Self {
-        Self { start: self.start, end: other.end }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Ast {
     pub kind: AstKind,
-    pub span: Span,
+    pub loc: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

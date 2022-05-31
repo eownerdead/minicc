@@ -31,21 +31,18 @@ impl<'a> Parser<'a> {
     ///           | "(" add ")"
     /// ```
     fn primary(&mut self) -> Ast {
-        let start = self.cur().span;
+        let loc = self.cur().loc;
 
         match self.cur().kind {
             TokenKind::Int(x) => {
                 self.next();
-                Ast {
-                    kind: AstKind::IntLit(ast::IntLit { val: x }),
-                    span: start,
-                }
+                Ast { kind: AstKind::IntLit(ast::IntLit { val: x }), loc }
             }
             TokenKind::LParen => {
                 self.next();
                 let node = self.add();
                 self.skip(&TokenKind::RParen);
-                Ast { span: start.to(self.cur().span), ..node }
+                node
             }
             ref kind => {
                 self.err(&format!("expected expression, found `{kind}`"));
@@ -58,13 +55,12 @@ impl<'a> Parser<'a> {
     ///         | primary
     /// ```
     fn unary(&mut self) -> Ast {
-        let start = self.cur().span;
+        let loc = self.cur().loc;
 
         match self.cur().kind {
             TokenKind::Plus => {
                 self.next();
-                let node = self.unary();
-                Ast { span: start.to(self.cur().span), ..node }
+                self.unary()
             }
             TokenKind::Minus => {
                 self.next();
@@ -75,7 +71,7 @@ impl<'a> Parser<'a> {
                         op: ast::OpUn::Neg,
                         expr: Box::new(expr),
                     }),
-                    span: start.to(self.cur().span),
+                    loc,
                 }
             }
 
@@ -92,7 +88,7 @@ impl<'a> Parser<'a> {
     }
 
     fn mul_rhs(&mut self, lhs: Ast) -> Ast {
-        let start = self.cur().span;
+        let loc = self.cur().loc;
 
         let op = match self.cur().kind {
             TokenKind::Asterisk => ast::OpBin::Mul,
@@ -110,7 +106,7 @@ impl<'a> Parser<'a> {
                 lhs: Box::new(lhs),
                 rhs: Box::new(rhs),
             }),
-            span: start.to(self.cur().span),
+            loc,
         };
 
         self.mul_rhs(lhs)
@@ -125,7 +121,7 @@ impl<'a> Parser<'a> {
     }
 
     fn add_rhs(&mut self, lhs: Ast) -> Ast {
-        let start = self.cur().span;
+        let loc = self.cur().loc;
 
         let op = match self.cur().kind {
             TokenKind::Plus => ast::OpBin::Add,
@@ -142,7 +138,7 @@ impl<'a> Parser<'a> {
                 lhs: Box::new(lhs),
                 rhs: Box::new(rhs),
             }),
-            span: start.to(self.cur().span),
+            loc,
         };
 
         self.add_rhs(lhs)
@@ -167,7 +163,7 @@ impl<'a> Parser<'a> {
     /// compound_stmt ::= stmt* "}"
     /// ```
     fn compound_stmt(&mut self) -> Ast {
-        let start = self.cur().span;
+        let loc = self.cur().loc;
 
         let mut item = Vec::new();
         loop {
@@ -182,12 +178,12 @@ impl<'a> Parser<'a> {
 
         Ast {
             kind: AstKind::CompoundStmt(ast::CompoundStmt { items: item }),
-            span: start.to(self.cur().span),
+            loc,
         }
     }
 
     fn err(&self, msg: &str) -> ! {
-        println!("{pos}: {msg}", pos = self.cur().span.start);
+        println!("{pos}: {msg}", pos = self.cur().loc);
         exit(1);
     }
 
