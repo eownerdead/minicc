@@ -7,12 +7,20 @@ name = "ccom"
 version = "0.1.0"
 dependencies = [
  "minicc_ast",
+ "minicc_gen",
  "minicc_parser",
 ]
 
 [[package]]
 name = "minicc_ast"
 version = "0.1.0"
+
+[[package]]
+name = "minicc_gen"
+version = "0.1.0"
+dependencies = [
+ "minicc_ast",
+]
 
 [[package]]
 name = "minicc_parser"

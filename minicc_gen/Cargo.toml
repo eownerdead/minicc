@@ -1,9 +1,9 @@
 [package]
-name = "ccom"
+name = "minicc_gen"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+
 [dependencies]
 minicc_ast = { path = "../minicc_ast" }
-minicc_parser = { path = "../minicc_parser" }
-minicc_gen = { path = "../minicc_gen" }
