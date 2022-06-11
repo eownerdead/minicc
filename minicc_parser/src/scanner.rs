@@ -22,6 +22,7 @@ pub(crate) enum TokenKind {
     Eq,       // `=`
 
     Int,
+    Return,
 
     IntLit(i64), // Integer literals e.g. `123`
 
@@ -32,26 +33,28 @@ pub(crate) enum TokenKind {
 
 impl std::fmt::Display for TokenKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        use TokenKind::*;
         match self {
-            TokenKind::Plus => write!(f, "+"),
-            TokenKind::Minus => write!(f, "-"),
-            TokenKind::Asterisk => write!(f, "*"),
-            TokenKind::Slash => write!(f, "/"),
-            TokenKind::Percent => write!(f, "%"),
-            TokenKind::LParen => write!(f, "("),
-            TokenKind::RParen => write!(f, ")"),
-            TokenKind::LBrace => write!(f, "{{"),
-            TokenKind::RBrace => write!(f, "}}"),
-            TokenKind::Semi => write!(f, ";"),
-            TokenKind::Eq => write!(f, "="),
+            Plus => write!(f, "+"),
+            Minus => write!(f, "-"),
+            Asterisk => write!(f, "*"),
+            Slash => write!(f, "/"),
+            Percent => write!(f, "%"),
+            LParen => write!(f, "("),
+            RParen => write!(f, ")"),
+            LBrace => write!(f, "{{"),
+            RBrace => write!(f, "}}"),
+            Semi => write!(f, ";"),
+            Eq => write!(f, "="),
 
-            TokenKind::Int => write!(f, "int"),
+            Int => write!(f, "int"),
+            Return => write!(f, "return"),
 
-            TokenKind::IntLit(x) => write!(f, "{}", x),
+            IntLit(x) => write!(f, "{}", x),
 
-            TokenKind::Ident(x) => write!(f, "{}", x),
+            Ident(x) => write!(f, "{}", x),
 
-            TokenKind::Eof => write!(f, "EOF"),
+            Eof => write!(f, "EOF"),
         }
     }
 }
@@ -135,6 +138,15 @@ impl<'a> Scanner<'a> {
     }
 
     fn ident(&mut self) -> Token {
+        let s = self.read_ident();
+        match s.as_str() {
+            "int" => Token { kind: TokenKind::Int, loc: self.loc },
+            "return" => Token { kind: TokenKind::Return, loc: self.loc },
+            _ => Token { kind: TokenKind::Ident(s), loc: self.loc },
+        }
+    }
+
+    fn read_ident(&mut self) -> String {
         let mut s = self.peek_char().unwrap().to_string();
         self.next_char();
         loop {
@@ -143,12 +155,7 @@ impl<'a> Scanner<'a> {
                     s.push(c);
                     self.next_char();
                 }
-                _ => {
-                    return match s.as_str() {
-                        "int" => Token { kind: TokenKind::Int, loc: self.loc },
-                        _ => Token { kind: TokenKind::Ident(s), loc: self.loc },
-                    }
-                }
+                _ => return s,
             }
         }
     }

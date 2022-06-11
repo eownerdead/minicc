@@ -190,9 +190,12 @@ impl<'a> Parser<'a> {
     /// ```ebnf
     /// stmt ::= "{" compound_stmt
     ///        | "int" decl ";"
+    ///        | "return" assign ";"
     ///        | assign ";"
     /// ```
     fn stmt(&mut self) -> Ast {
+        let loc = self.cur().loc;
+
         match self.cur().kind {
             TokenKind::LBrace => {
                 self.next();
@@ -203,6 +206,15 @@ impl<'a> Parser<'a> {
                 let node = self.decl();
                 self.skip(&TokenKind::Semi);
                 node
+            }
+            TokenKind::Return => {
+                self.next();
+                let expr = self.assign();
+                self.skip(&TokenKind::Semi);
+                Ast {
+                    kind: AstKind::Return(ast::Return { expr: Box::new(expr) }),
+                    loc,
+                }
             }
             _ => {
                 let node = self.assign();

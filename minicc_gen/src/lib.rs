@@ -33,6 +33,9 @@ impl<'a> Gen<'a> {
     }
 
     fn epilogue(&mut self) {
+        // With out `return`, 0 should be returned.
+        o!(self.f, "	mov	$0, %eax");
+        o!(self.f, ".Lret:");
         o!(self.f, "	mov	%ebp, %esp");
         o!(self.f, "	pop	%ebp");
         o!(self.f, "	ret");
@@ -47,13 +50,15 @@ impl<'a> Gen<'a> {
     }
 
     fn gen(&mut self, node: &ast::Ast) {
+        use ast::AstKind::*;
         match &node.kind {
-            ast::AstKind::CompoundStmt(n) => self.compound_stmt(n, node.loc),
-            ast::AstKind::Decl(n) => self.decl(n, node.loc),
-            ast::AstKind::Ref(n) => self.ref_(n, node.loc),
-            ast::AstKind::IntLit(n) => self.int_lit(n, node.loc),
-            ast::AstKind::UnOp(n) => self.un_op(n, node.loc),
-            ast::AstKind::BinOp(n) => self.bin_op(n, node.loc),
+            CompoundStmt(n) => self.compound_stmt(n, node.loc),
+            Decl(n) => self.decl(n, node.loc),
+            Return(n) => self.return_(n, node.loc),
+            Ref(n) => self.ref_(n, node.loc),
+            IntLit(n) => self.int_lit(n, node.loc),
+            UnOp(n) => self.un_op(n, node.loc),
+            BinOp(n) => self.bin_op(n, node.loc),
         }
     }
 
@@ -66,6 +71,11 @@ impl<'a> Gen<'a> {
     fn decl(&mut self, node: &ast::Decl, _loc: usize) {
         self.offset += 4;
         self.vars.insert(node.ident.clone(), self.offset);
+    }
+
+    fn return_(&mut self, node: &ast::Return, _loc: usize) {
+        self.gen(&node.expr);
+        o!(self.f, "	jmp	.Lret");
     }
 
     fn ref_(&mut self, node: &ast::Ref, loc: usize) {

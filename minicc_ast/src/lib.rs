@@ -8,6 +8,7 @@ pub struct Ast {
 pub enum AstKind {
     CompoundStmt(CompoundStmt),
     Decl(Decl),
+    Return(Return),
     Ref(Ref),
     IntLit(IntLit),
     UnOp(UnOp),
@@ -22,6 +23,11 @@ pub struct CompoundStmt {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Decl {
     pub ident: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Return {
+    pub expr: Box<Ast>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
