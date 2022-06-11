@@ -27,16 +27,21 @@ impl<'a> Parser<'a> {
     }
 
     /// ```ebnf
-    /// primary ::= [0..9]+
+    /// primary ::= [0-9]+
+    ///           | [a-zA-Z][a-zA-Z0-9]*
     ///           | "(" add ")"
     /// ```
     fn primary(&mut self) -> Ast {
         let loc = self.cur().loc;
 
-        match self.cur().kind {
-            TokenKind::Int(x) => {
+        match self.cur().kind.clone() {
+            TokenKind::IntLit(x) => {
                 self.next();
                 Ast { kind: AstKind::IntLit(ast::IntLit { val: x }), loc }
+            }
+            TokenKind::Ident(i) => {
+                self.next();
+                Ast { kind: AstKind::Ref(ast::Ref { ident: i }), loc }
             }
             TokenKind::LParen => {
                 self.next();
@@ -145,17 +150,65 @@ impl<'a> Parser<'a> {
     }
 
     /// ```ebnf
+    /// assign ::= add "=" assign
+    /// ```
+    fn assign(&mut self) -> Ast {
+        let loc = self.cur().loc;
+
+        let lhs = self.add();
+        let op = match self.cur().kind {
+            TokenKind::Eq => ast::OpBin::Asign,
+            _ => return lhs,
+        };
+        self.next();
+
+        let rhs = self.assign();
+
+        Ast {
+            kind: AstKind::BinOp(ast::BinOp {
+                op,
+                lhs: Box::new(lhs),
+                rhs: Box::new(rhs),
+            }),
+            loc,
+        }
+    }
+
+    /// ```ebnf
+    /// decl ::= [a-zA-Z][a-zA-Z0-9]*
+    /// ```
+    fn decl(&mut self) -> Ast {
+        let loc = self.cur().loc;
+        if let TokenKind::Ident(i) = self.cur().kind.clone() {
+            self.next();
+            Ast { kind: AstKind::Decl(ast::Decl { ident: i }), loc }
+        } else {
+            self.err("expected identifier")
+        }
+    }
+
+    /// ```ebnf
     /// stmt ::= "{" compound_stmt
-    ///        | add ";"
+    ///        | "int" decl ";"
+    ///        | assign ";"
     /// ```
     fn stmt(&mut self) -> Ast {
-        if self.cur().kind == TokenKind::LBrace {
-            self.compound_stmt()
-        } else {
-            let node = self.add();
-            self.skip(&TokenKind::Semi);
-
-            node
+        match self.cur().kind {
+            TokenKind::LBrace => {
+                self.next();
+                self.compound_stmt()
+            }
+            TokenKind::Int => {
+                self.next();
+                let node = self.decl();
+                self.skip(&TokenKind::Semi);
+                node
+            }
+            _ => {
+                let node = self.assign();
+                self.skip(&TokenKind::Semi);
+                node
+            }
         }
     }
 

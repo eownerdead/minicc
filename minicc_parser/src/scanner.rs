@@ -19,8 +19,13 @@ pub(crate) enum TokenKind {
     LBrace,   // `{`
     RBrace,   // `}`
     Semi,     // `;`
+    Eq,       // `=`
 
-    Int(i64), // Integer literals e.g. `123`
+    Int,
+
+    IntLit(i64), // Integer literals e.g. `123`
+
+    Ident(String),
 
     Eof, // End Of File
 }
@@ -38,7 +43,14 @@ impl std::fmt::Display for TokenKind {
             TokenKind::LBrace => write!(f, "{{"),
             TokenKind::RBrace => write!(f, "}}"),
             TokenKind::Semi => write!(f, ";"),
-            TokenKind::Int(x) => write!(f, "{}", x),
+            TokenKind::Eq => write!(f, "="),
+
+            TokenKind::Int => write!(f, "int"),
+
+            TokenKind::IntLit(x) => write!(f, "{}", x),
+
+            TokenKind::Ident(x) => write!(f, "{}", x),
+
             TokenKind::Eof => write!(f, "EOF"),
         }
     }
@@ -106,11 +118,38 @@ impl<'a> Scanner<'a> {
                 self.next_char();
                 Token { kind: TokenKind::Semi, loc: self.loc }
             }
-            Some(c) if c.is_ascii_digit() => {
-                Token { kind: TokenKind::Int(self.read_int()), loc: self.loc }
+            Some('=') => {
+                self.next_char();
+                Token { kind: TokenKind::Eq, loc: self.loc }
             }
+            Some(c) if c.is_ascii_digit() => {
+                Token {
+                    kind: TokenKind::IntLit(self.read_int()),
+                    loc: self.loc,
+                }
+            }
+            Some(c) if c.is_ascii_alphabetic() => self.ident(),
 
             Some(c) => self.err(&format!("unknown token `{}`", c)),
+        }
+    }
+
+    fn ident(&mut self) -> Token {
+        let mut s = self.peek_char().unwrap().to_string();
+        self.next_char();
+        loop {
+            match self.peek_char() {
+                Some(c) if c.is_ascii_alphanumeric() => {
+                    s.push(c);
+                    self.next_char();
+                }
+                _ => {
+                    return match s.as_str() {
+                        "int" => Token { kind: TokenKind::Int, loc: self.loc },
+                        _ => Token { kind: TokenKind::Ident(s), loc: self.loc },
+                    }
+                }
+            }
         }
     }
 

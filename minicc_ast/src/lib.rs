@@ -7,6 +7,8 @@ pub struct Ast {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AstKind {
     CompoundStmt(CompoundStmt),
+    Decl(Decl),
+    Ref(Ref),
     IntLit(IntLit),
     UnOp(UnOp),
     BinOp(BinOp),
@@ -15,6 +17,16 @@ pub enum AstKind {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CompoundStmt {
     pub items: Vec<Ast>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Decl {
+    pub ident: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Ref {
+    pub ident: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -42,9 +54,10 @@ pub struct BinOp {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum OpBin {
-    Add, // `+`
-    Sub, // `-`
-    Mul, // `*`
-    Div, // `/`
-    Mod, // `%`
+    Add,   // `+`
+    Sub,   // `-`
+    Mul,   // `*`
+    Div,   // `/`
+    Mod,   // `%`
+    Asign, // `=`
 }
