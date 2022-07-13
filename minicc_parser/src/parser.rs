@@ -256,6 +256,7 @@ impl<'a> Parser<'a> {
     ///        | "int" decl ";"
     ///        | "return" assign ";"
     ///        | "if" if_
+    ///        | "dbg" "(" assign ")" ";"
     ///        | assign ";"
     /// ```
     fn stmt(&mut self) -> Ast {
@@ -284,6 +285,18 @@ impl<'a> Parser<'a> {
             TokenKind::If => {
                 self.next();
                 self.if_()
+            }
+            TokenKind::Dbg => {
+                self.next();
+                self.skip(&TokenKind::LParen);
+                let expr = self.assign();
+                self.skip(&TokenKind::RParen);
+                self.skip(&TokenKind::Semi);
+
+                Ast {
+                    kind: AstKind::Dbg(ast::Dbg { expr: Box::new(expr) }),
+                    loc,
+                }
             }
             _ => {
                 let node = self.assign();

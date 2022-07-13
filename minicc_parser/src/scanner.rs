@@ -32,6 +32,7 @@ pub(crate) enum TokenKind {
     Else,
     Int,
     Return,
+    Dbg,
 
     IntLit(i64), // Integer literals e.g. `123`
 
@@ -67,6 +68,7 @@ impl std::fmt::Display for TokenKind {
             Else => write!(f, "else"),
             Int => write!(f, "int"),
             Return => write!(f, "return"),
+            Dbg => write!(f, "dbg"),
 
             IntLit(x) => write!(f, "{}", x),
 
@@ -197,6 +199,7 @@ impl<'a> Scanner<'a> {
             "else" => Token { kind: TokenKind::Else, loc: self.loc },
             "int" => Token { kind: TokenKind::Int, loc: self.loc },
             "return" => Token { kind: TokenKind::Return, loc: self.loc },
+            "dbg" => Token { kind: TokenKind::Dbg, loc: self.loc },
             _ => Token { kind: TokenKind::Ident(s), loc: self.loc },
         }
     }

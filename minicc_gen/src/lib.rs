@@ -58,6 +58,7 @@ impl<'a> Gen<'a> {
             If(n) => self.if_(n, node.loc),
             Decl(n) => self.decl(n, node.loc),
             Return(n) => self.return_(n, node.loc),
+            Dbg(n) => self.dbg(n, node.loc),
             Ref(n) => self.ref_(n, node.loc),
             IntLit(n) => self.int_lit(n, node.loc),
             UnOp(n) => self.un_op(n, node.loc),
@@ -97,6 +98,12 @@ impl<'a> Gen<'a> {
     fn return_(&mut self, node: &ast::Return, _loc: usize) {
         self.gen(&node.expr);
         o!(self.f, "	jmp	.Lret");
+    }
+
+    fn dbg(&mut self, node: &ast::Dbg, _loc: usize) {
+        self.gen(&node.expr);
+        o!(self.f, "	push	%eax");
+        o!(self.f, "	call	dbg");
     }
 
     fn ref_(&mut self, node: &ast::Ref, loc: usize) {
