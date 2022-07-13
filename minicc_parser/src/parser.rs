@@ -1,3 +1,4 @@
+use std::iter::Peekable;
 use std::process::exit;
 
 use ast::Ast;
@@ -7,23 +8,17 @@ use minicc_ast::AstKind;
 use super::scanner::{Scanner, Token, TokenKind};
 
 pub(crate) struct Parser<'a> {
-    scanner: Scanner<'a>,
-    tok: Token,
+    scanner: Peekable<Scanner<'a>>,
 }
 
 impl<'a> Parser<'a> {
-    pub fn new(mut scanner: Scanner<'a>) -> Self {
-        let tok = scanner.next();
-
-        Self { scanner, tok }
+    pub fn new(scanner: Scanner<'a>) -> Self {
+        Self { scanner: scanner.peekable() }
     }
 
     pub fn parse(&mut self) -> Ast {
         self.skip(&TokenKind::LBrace);
-        let node = self.compound_stmt();
-        self.skip(&TokenKind::Eof);
-
-        node
+        self.compound_stmt()
     }
 
     /// ```ebnf
@@ -32,9 +27,9 @@ impl<'a> Parser<'a> {
     ///           | "(" eq ")"
     /// ```
     fn primary(&mut self) -> Ast {
-        let loc = self.cur().loc;
+        let loc = self.peek().loc;
 
-        match self.cur().kind.clone() {
+        match self.peek().kind.clone() {
             TokenKind::IntLit(x) => {
                 self.next();
                 Ast { kind: AstKind::IntLit(ast::IntLit { val: x }), loc }
@@ -60,9 +55,9 @@ impl<'a> Parser<'a> {
     ///         | primary
     /// ```
     fn unary(&mut self) -> Ast {
-        let loc = self.cur().loc;
+        let loc = self.peek().loc;
 
-        let op = match self.cur().kind {
+        let op = match self.peek().kind {
             TokenKind::Plus => {
                 self.next();
                 return self.unary();
@@ -94,9 +89,9 @@ impl<'a> Parser<'a> {
     }
 
     fn mul_rhs(&mut self, lhs: Ast) -> Ast {
-        let loc = self.cur().loc;
+        let loc = self.peek().loc;
 
-        let op = match self.cur().kind {
+        let op = match self.peek().kind {
             TokenKind::Asterisk => ast::OpBin::Mul,
             TokenKind::Slash => ast::OpBin::Div,
             TokenKind::Percent => ast::OpBin::Mod,
@@ -127,9 +122,9 @@ impl<'a> Parser<'a> {
     }
 
     fn add_rhs(&mut self, lhs: Ast) -> Ast {
-        let loc = self.cur().loc;
+        let loc = self.peek().loc;
 
-        let op = match self.cur().kind {
+        let op = match self.peek().kind {
             TokenKind::Plus => ast::OpBin::Add,
             TokenKind::Minus => ast::OpBin::Sub,
             _ => return lhs,
@@ -160,9 +155,9 @@ impl<'a> Parser<'a> {
     }
 
     fn rel_rhs(&mut self, lhs: Ast) -> Ast {
-        let loc = self.cur().loc;
+        let loc = self.peek().loc;
 
-        let op = match self.cur().kind {
+        let op = match self.peek().kind {
             TokenKind::Lt => ast::OpBin::Lt,
             TokenKind::Gt => ast::OpBin::Gt,
             TokenKind::LtEq => ast::OpBin::Le,
@@ -195,9 +190,9 @@ impl<'a> Parser<'a> {
     }
 
     fn eq_rhs(&mut self, lhs: Ast) -> Ast {
-        let loc = self.cur().loc;
+        let loc = self.peek().loc;
 
-        let op = match self.cur().kind {
+        let op = match self.peek().kind {
             TokenKind::EqEq => ast::OpBin::Eq,
             TokenKind::ExclaimEq => ast::OpBin::Ne,
             _ => return lhs,
@@ -222,10 +217,10 @@ impl<'a> Parser<'a> {
     /// assign ::= add "=" assign
     /// ```
     fn assign(&mut self) -> Ast {
-        let loc = self.cur().loc;
+        let loc = self.peek().loc;
 
         let lhs = self.eq();
-        let op = match self.cur().kind {
+        let op = match self.peek().kind {
             TokenKind::Eq => ast::OpBin::Asign,
             _ => return lhs,
         };
@@ -247,8 +242,8 @@ impl<'a> Parser<'a> {
     /// decl ::= [a-zA-Z][a-zA-Z0-9]*
     /// ```
     fn decl(&mut self) -> Ast {
-        let loc = self.cur().loc;
-        if let TokenKind::Ident(i) = self.cur().kind.clone() {
+        let loc = self.peek().loc;
+        if let TokenKind::Ident(i) = self.peek().kind.clone() {
             self.next();
             Ast { kind: AstKind::Decl(ast::Decl { ident: i }), loc }
         } else {
@@ -263,9 +258,9 @@ impl<'a> Parser<'a> {
     ///        | assign ";"
     /// ```
     fn stmt(&mut self) -> Ast {
-        let loc = self.cur().loc;
+        let loc = self.peek().loc;
 
-        match self.cur().kind {
+        match self.peek().kind {
             TokenKind::LBrace => {
                 self.next();
                 self.compound_stmt()
@@ -297,11 +292,11 @@ impl<'a> Parser<'a> {
     /// compound_stmt ::= stmt* "}"
     /// ```
     fn compound_stmt(&mut self) -> Ast {
-        let loc = self.cur().loc;
+        let loc = self.peek().loc;
 
         let mut item = Vec::new();
         loop {
-            if self.cur().kind == TokenKind::RBrace {
+            if self.peek().kind == TokenKind::RBrace {
                 self.next();
                 break;
             }
@@ -316,26 +311,26 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn err(&self, msg: &str) -> ! {
-        println!("{pos}: {msg}", pos = self.cur().loc);
+    fn err(&mut self, msg: &str) -> ! {
+        println!("{pos}: {msg}", pos = self.peek().loc);
         exit(1);
     }
 
-    fn cur(&self) -> &Token {
-        &self.tok
+    fn peek(&mut self) -> &Token {
+        self.scanner.peek().unwrap_or(&Token { kind: TokenKind::Eof, loc: 0 })
     }
 
-    fn next(&mut self) -> &Token {
-        self.tok = self.scanner.next();
-        self.cur()
+    fn next(&mut self) -> Token {
+        self.scanner.next().unwrap_or(Token { kind: TokenKind::Eof, loc: 0 })
     }
 
     fn skip(&mut self, kind: &TokenKind) {
-        if self.cur().kind != *kind {
+        let k = self.peek().kind.clone();
+        if k != *kind {
             self.err(&format!(
                 "expected `{expected}`, found `{found}`",
                 expected = kind,
-                found = self.cur().kind,
+                found = k,
             ));
         }
         self.next();

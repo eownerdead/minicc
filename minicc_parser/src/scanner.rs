@@ -67,7 +67,6 @@ impl std::fmt::Display for TokenKind {
             IntLit(x) => write!(f, "{}", x),
 
             Ident(x) => write!(f, "{}", x),
-
             Eof => write!(f, "EOF"),
         }
     }
@@ -81,106 +80,110 @@ pub(crate) struct Scanner<'a> {
     loc: usize,
 }
 
-impl<'a> Scanner<'a> {
-    pub fn new(src: &'a str) -> Self {
-        Self { s: src.chars(), loc: 0 }
-    }
+impl<'a> Iterator for Scanner<'a> {
+    type Item = Token;
 
-    pub fn next(&mut self) -> Token {
+    fn next(&mut self) -> Option<Self::Item> {
         // Skip white spaces.
         while matches!(self.peek_char(), Some(c) if c.is_whitespace()) {
             self.next_char();
         }
 
         match self.peek_char() {
-            None => Token { kind: TokenKind::Eof, loc: self.loc },
+            None => None,
 
             Some('+') => {
                 self.next_char();
-                Token { kind: TokenKind::Plus, loc: self.loc }
+                Some(Token { kind: TokenKind::Plus, loc: self.loc })
             }
             Some('-') => {
                 self.next_char();
-                Token { kind: TokenKind::Minus, loc: self.loc }
+                Some(Token { kind: TokenKind::Minus, loc: self.loc })
             }
             Some('*') => {
                 self.next_char();
-                Token { kind: TokenKind::Asterisk, loc: self.loc }
+                Some(Token { kind: TokenKind::Asterisk, loc: self.loc })
             }
             Some('/') => {
                 self.next_char();
-                Token { kind: TokenKind::Slash, loc: self.loc }
+                Some(Token { kind: TokenKind::Slash, loc: self.loc })
             }
             Some('%') => {
                 self.next_char();
-                Token { kind: TokenKind::Percent, loc: self.loc }
+                Some(Token { kind: TokenKind::Percent, loc: self.loc })
             }
             Some('!') => {
                 self.next_char();
                 if let Some('=') = self.peek_char() {
                     self.next_char();
-                    Token { kind: TokenKind::ExclaimEq, loc: self.loc }
+                    Some(Token { kind: TokenKind::ExclaimEq, loc: self.loc })
                 } else {
-                    Token { kind: TokenKind::Exclaim, loc: self.loc }
+                    Some(Token { kind: TokenKind::Exclaim, loc: self.loc })
                 }
             }
             Some('<') => {
                 self.next_char();
                 if let Some('=') = self.peek_char() {
                     self.next_char();
-                    Token { kind: TokenKind::LtEq, loc: self.loc }
+                    Some(Token { kind: TokenKind::LtEq, loc: self.loc })
                 } else {
-                    Token { kind: TokenKind::Lt, loc: self.loc }
+                    Some(Token { kind: TokenKind::Lt, loc: self.loc })
                 }
             }
             Some('>') => {
                 self.next_char();
                 if let Some('=') = self.peek_char() {
                     self.next_char();
-                    Token { kind: TokenKind::GtEq, loc: self.loc }
+                    Some(Token { kind: TokenKind::GtEq, loc: self.loc })
                 } else {
-                    Token { kind: TokenKind::Gt, loc: self.loc }
+                    Some(Token { kind: TokenKind::Gt, loc: self.loc })
                 }
             }
             Some('=') => {
                 self.next_char();
                 if let Some('=') = self.peek_char() {
                     self.next_char();
-                    Token { kind: TokenKind::EqEq, loc: self.loc }
+                    Some(Token { kind: TokenKind::EqEq, loc: self.loc })
                 } else {
-                    Token { kind: TokenKind::Eq, loc: self.loc }
+                    Some(Token { kind: TokenKind::Eq, loc: self.loc })
                 }
             }
             Some('(') => {
                 self.next_char();
-                Token { kind: TokenKind::LParen, loc: self.loc }
+                Some(Token { kind: TokenKind::LParen, loc: self.loc })
             }
             Some(')') => {
                 self.next_char();
-                Token { kind: TokenKind::RParen, loc: self.loc }
+                Some(Token { kind: TokenKind::RParen, loc: self.loc })
             }
             Some('{') => {
                 self.next_char();
-                Token { kind: TokenKind::LBrace, loc: self.loc }
+                Some(Token { kind: TokenKind::LBrace, loc: self.loc })
             }
             Some('}') => {
                 self.next_char();
-                Token { kind: TokenKind::RBrace, loc: self.loc }
+                Some(Token { kind: TokenKind::RBrace, loc: self.loc })
             }
             Some(';') => {
                 self.next_char();
-                Token { kind: TokenKind::Semi, loc: self.loc }
+                Some(Token { kind: TokenKind::Semi, loc: self.loc })
             }
             Some(c) if c.is_ascii_digit() => {
-                Token {
+                Some(Token {
                     kind: TokenKind::IntLit(self.read_int()),
                     loc: self.loc,
-                }
+                })
             }
-            Some(c) if c.is_ascii_alphabetic() => self.ident(),
+            Some(c) if c.is_ascii_alphabetic() => Some(self.ident()),
 
             Some(c) => self.err(&format!("unknown token `{}`", c)),
         }
+    }
+}
+
+impl<'a> Scanner<'a> {
+    pub fn new(src: &'a str) -> Self {
+        Self { s: src.chars(), loc: 0 }
     }
 
     fn ident(&mut self) -> Token {
