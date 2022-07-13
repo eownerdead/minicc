@@ -48,7 +48,8 @@ pub struct UnOp {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum OpUn {
-    Neg,
+    Neg,    // `-`
+    LogNot, // `!`
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -65,5 +66,11 @@ pub enum OpBin {
     Mul,   // `*`
     Div,   // `/`
     Mod,   // `%`
+    Lt,    // `<`
+    Gt,    // `>`
+    Le,    // `<=`
+    Ge,    // `>=`
+    Eq,    // `==`
+    Ne,    // `!=`
     Asign, // `=`
 }

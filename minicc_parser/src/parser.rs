@@ -29,7 +29,7 @@ impl<'a> Parser<'a> {
     /// ```ebnf
     /// primary ::= [0-9]+
     ///           | [a-zA-Z][a-zA-Z0-9]*
-    ///           | "(" add ")"
+    ///           | "(" eq ")"
     /// ```
     fn primary(&mut self) -> Ast {
         let loc = self.cur().loc;
@@ -45,7 +45,7 @@ impl<'a> Parser<'a> {
             }
             TokenKind::LParen => {
                 self.next();
-                let node = self.add();
+                let node = self.eq();
                 self.skip(&TokenKind::RParen);
                 node
             }
@@ -62,25 +62,26 @@ impl<'a> Parser<'a> {
     fn unary(&mut self) -> Ast {
         let loc = self.cur().loc;
 
-        match self.cur().kind {
+        let op = match self.cur().kind {
             TokenKind::Plus => {
                 self.next();
-                self.unary()
+                return self.unary();
             }
             TokenKind::Minus => {
                 self.next();
-                let expr = self.unary();
-
-                Ast {
-                    kind: AstKind::UnOp(ast::UnOp {
-                        op: ast::OpUn::Neg,
-                        expr: Box::new(expr),
-                    }),
-                    loc,
-                }
+                ast::OpUn::Neg
+            }
+            TokenKind::Exclaim => {
+                self.next();
+                ast::OpUn::LogNot
             }
 
-            _ => self.primary(),
+            _ => return self.primary(),
+        };
+
+        Ast {
+            kind: AstKind::UnOp(ast::UnOp { op, expr: Box::new(self.unary()) }),
+            loc,
         }
     }
 
@@ -150,12 +151,80 @@ impl<'a> Parser<'a> {
     }
 
     /// ```ebnf
+    /// rel := add ("<" add | ">" add | "<=" add | ">=" add)*
+    /// ```
+    fn rel(&mut self) -> Ast {
+        let lhs = self.add();
+
+        self.rel_rhs(lhs)
+    }
+
+    fn rel_rhs(&mut self, lhs: Ast) -> Ast {
+        let loc = self.cur().loc;
+
+        let op = match self.cur().kind {
+            TokenKind::Lt => ast::OpBin::Lt,
+            TokenKind::Gt => ast::OpBin::Gt,
+            TokenKind::LtEq => ast::OpBin::Le,
+            TokenKind::GtEq => ast::OpBin::Ge,
+            _ => return lhs,
+        };
+        self.next();
+
+        let rhs = self.add();
+
+        let lhs = Ast {
+            kind: AstKind::BinOp(ast::BinOp {
+                op,
+                lhs: Box::new(lhs),
+                rhs: Box::new(rhs),
+            }),
+            loc,
+        };
+
+        self.rel_rhs(lhs)
+    }
+
+    /// ```ebnf
+    /// eq := rel ("==" rel | "!=" rel)*
+    /// ```
+    fn eq(&mut self) -> Ast {
+        let lhs = self.rel();
+
+        self.eq_rhs(lhs)
+    }
+
+    fn eq_rhs(&mut self, lhs: Ast) -> Ast {
+        let loc = self.cur().loc;
+
+        let op = match self.cur().kind {
+            TokenKind::EqEq => ast::OpBin::Eq,
+            TokenKind::ExclaimEq => ast::OpBin::Ne,
+            _ => return lhs,
+        };
+        self.next();
+
+        let rhs = self.rel();
+
+        let lhs = Ast {
+            kind: AstKind::BinOp(ast::BinOp {
+                op,
+                lhs: Box::new(lhs),
+                rhs: Box::new(rhs),
+            }),
+            loc,
+        };
+
+        self.eq_rhs(lhs)
+    }
+
+    /// ```ebnf
     /// assign ::= add "=" assign
     /// ```
     fn assign(&mut self) -> Ast {
         let loc = self.cur().loc;
 
-        let lhs = self.add();
+        let lhs = self.eq();
         let op = match self.cur().kind {
             TokenKind::Eq => ast::OpBin::Asign,
             _ => return lhs,

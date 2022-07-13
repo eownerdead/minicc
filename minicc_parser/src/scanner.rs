@@ -9,17 +9,24 @@ pub(crate) struct Token {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum TokenKind {
-    Plus,     // `+`
-    Minus,    //`-`
-    Asterisk, //`*`
-    Slash,    //`/`
-    Percent,  // `%`
-    LParen,   // `(`
-    RParen,   // `)`
-    LBrace,   // `{`
-    RBrace,   // `}`
-    Semi,     // `;`
-    Eq,       // `=`
+    Plus,      // `+`
+    Minus,     //`-`
+    Asterisk,  //`*`
+    Slash,     //`/`
+    Percent,   // `%`
+    Exclaim,   // `!`
+    Lt,        // `<`
+    Gt,        // `>`
+    LtEq,      // `<=`
+    GtEq,      // `>=`
+    EqEq,      // `==`
+    ExclaimEq, // `!=`
+    LParen,    // `(`
+    RParen,    // `)`
+    LBrace,    // `{`
+    RBrace,    // `}`
+    Semi,      // `;`
+    Eq,        // `=`
 
     Int,
     Return,
@@ -40,6 +47,13 @@ impl std::fmt::Display for TokenKind {
             Asterisk => write!(f, "*"),
             Slash => write!(f, "/"),
             Percent => write!(f, "%"),
+            Exclaim => write!(f, "!"),
+            Lt => write!(f, "<"),
+            Gt => write!(f, ">"),
+            LtEq => write!(f, "<="),
+            GtEq => write!(f, ">="),
+            EqEq => write!(f, "=="),
+            ExclaimEq => write!(f, "!="),
             LParen => write!(f, "("),
             RParen => write!(f, ")"),
             LBrace => write!(f, "{{"),
@@ -101,6 +115,42 @@ impl<'a> Scanner<'a> {
                 self.next_char();
                 Token { kind: TokenKind::Percent, loc: self.loc }
             }
+            Some('!') => {
+                self.next_char();
+                if let Some('=') = self.peek_char() {
+                    self.next_char();
+                    Token { kind: TokenKind::ExclaimEq, loc: self.loc }
+                } else {
+                    Token { kind: TokenKind::Exclaim, loc: self.loc }
+                }
+            }
+            Some('<') => {
+                self.next_char();
+                if let Some('=') = self.peek_char() {
+                    self.next_char();
+                    Token { kind: TokenKind::LtEq, loc: self.loc }
+                } else {
+                    Token { kind: TokenKind::Lt, loc: self.loc }
+                }
+            }
+            Some('>') => {
+                self.next_char();
+                if let Some('=') = self.peek_char() {
+                    self.next_char();
+                    Token { kind: TokenKind::GtEq, loc: self.loc }
+                } else {
+                    Token { kind: TokenKind::Gt, loc: self.loc }
+                }
+            }
+            Some('=') => {
+                self.next_char();
+                if let Some('=') = self.peek_char() {
+                    self.next_char();
+                    Token { kind: TokenKind::EqEq, loc: self.loc }
+                } else {
+                    Token { kind: TokenKind::Eq, loc: self.loc }
+                }
+            }
             Some('(') => {
                 self.next_char();
                 Token { kind: TokenKind::LParen, loc: self.loc }
@@ -120,10 +170,6 @@ impl<'a> Scanner<'a> {
             Some(';') => {
                 self.next_char();
                 Token { kind: TokenKind::Semi, loc: self.loc }
-            }
-            Some('=') => {
-                self.next_char();
-                Token { kind: TokenKind::Eq, loc: self.loc }
             }
             Some(c) if c.is_ascii_digit() => {
                 Token {

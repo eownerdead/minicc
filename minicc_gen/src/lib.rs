@@ -97,6 +97,11 @@ impl<'a> Gen<'a> {
             ast::OpUn::Neg => {
                 o!(self.f, "	neg	%eax");
             }
+            ast::OpUn::LogNot => {
+                o!(self.f, "	cmp	$0, %eax");
+                o!(self.f, "	sete	%al");
+                o!(self.f, "	movzb	%al, %eax");
+            }
         }
     }
 
@@ -124,24 +129,41 @@ impl<'a> Gen<'a> {
         match node.op {
             ast::OpBin::Add => {
                 o!(self.f, "	add	%ecx, %eax");
+                return;
             }
             ast::OpBin::Sub => {
                 o!(self.f, "	sub	%ecx, %eax");
+                return;
             }
             ast::OpBin::Mul => {
                 o!(self.f, "	imul	%ecx, %eax");
+                return;
             }
             ast::OpBin::Div => {
                 o!(self.f, "	cltd");
                 o!(self.f, "	idiv	%ecx");
+                return;
             }
             ast::OpBin::Mod => {
                 o!(self.f, "	cltd");
                 o!(self.f, "	idiv	%ecx");
                 o!(self.f, "	mov	%edx, %eax");
+                return;
             }
-            _ => unreachable!(),
+            _ => {}
         }
+
+        o!(self.f, "	cmp	%ecx, %eax");
+        match node.op {
+            ast::OpBin::Lt => o!(self.f, "	setl	%al"),
+            ast::OpBin::Gt => o!(self.f, "	setg	%al"),
+            ast::OpBin::Le => o!(self.f, "	setle	%al"),
+            ast::OpBin::Ge => o!(self.f, "	setge	%al"),
+            ast::OpBin::Eq => o!(self.f, "	sete	%al"),
+            ast::OpBin::Ne => o!(self.f, "	setne	%al"),
+            _ => unreachable!("{:?}", node.op),
+        }
+        o!(self.f, "	movzb	%al, %eax");
     }
 
     fn err(&self, loc: usize, msg: &str) -> ! {

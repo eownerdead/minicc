@@ -37,3 +37,7 @@ test_case "   { return	64  -4 ;} " 60
 test_case " {return 4*	( 3+2)% 7; } " 6
 test_case " {	321 /43+ 12 ; 3	/2-1   +123;return 9 /4*(3 +2);} " 10
 test_case "{ int compiler; int b; compiler = 32 + 4; b = compiler - 15; return b; }" 21
+test_case "{ int foo; int bar; foo = 3; bar = 5; return foo == bar; }" 0
+test_case "{ return 42 > 42; }" 0
+test_case "{ return 42 >= 42; }" 1
+test_case "{ return !0 - !1; }" 1
