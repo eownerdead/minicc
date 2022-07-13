@@ -255,6 +255,7 @@ impl<'a> Parser<'a> {
     /// stmt ::= "{" compound_stmt
     ///        | "int" decl ";"
     ///        | "return" assign ";"
+    ///        | "if" if_
     ///        | assign ";"
     /// ```
     fn stmt(&mut self) -> Ast {
@@ -279,6 +280,10 @@ impl<'a> Parser<'a> {
                     kind: AstKind::Return(ast::Return { expr: Box::new(expr) }),
                     loc,
                 }
+            }
+            TokenKind::If => {
+                self.next();
+                self.if_()
             }
             _ => {
                 let node = self.assign();
@@ -307,6 +312,34 @@ impl<'a> Parser<'a> {
 
         Ast {
             kind: AstKind::CompoundStmt(ast::CompoundStmt { items: item }),
+            loc,
+        }
+    }
+
+    /// ```ebnf
+    /// if_ := "(" assign ")" stmt
+    /// ```
+    fn if_(&mut self) -> Ast {
+        let loc = self.peek().loc;
+
+        self.skip(&TokenKind::LParen);
+        let cond = self.assign();
+        self.skip(&TokenKind::RParen);
+        let then = self.stmt();
+
+        let else_ = if self.peek().kind == TokenKind::Else {
+            self.next();
+            Some(Box::new(self.stmt()))
+        } else {
+            None
+        };
+
+        Ast {
+            kind: AstKind::If(ast::If {
+                cond: Box::new(cond),
+                then: Box::new(then),
+                else_,
+            }),
             loc,
         }
     }

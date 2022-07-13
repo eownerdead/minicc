@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::io::Write;
+use std::ops::RangeFrom;
 use std::process::exit;
 
 use minicc_ast as ast;
@@ -14,7 +15,7 @@ macro_rules! o {
 }
 
 pub fn gen(f: &mut dyn Write, node: &ast::Ast) {
-    let mut g = Gen { f, offset: 0, vars: Default::default() };
+    let mut g = Gen { f, label_cnt: 0.., offset: 0, vars: Default::default() };
     g.prologue();
     g.gen(node);
     g.epilogue();
@@ -22,6 +23,7 @@ pub fn gen(f: &mut dyn Write, node: &ast::Ast) {
 
 struct Gen<'a> {
     pub f: &'a mut dyn Write,
+    pub label_cnt: RangeFrom<usize>,
     pub offset: usize,
     pub vars: HashMap<String, usize>,
 }
@@ -53,6 +55,7 @@ impl<'a> Gen<'a> {
         use ast::AstKind::*;
         match &node.kind {
             CompoundStmt(n) => self.compound_stmt(n, node.loc),
+            If(n) => self.if_(n, node.loc),
             Decl(n) => self.decl(n, node.loc),
             Return(n) => self.return_(n, node.loc),
             Ref(n) => self.ref_(n, node.loc),
@@ -66,6 +69,24 @@ impl<'a> Gen<'a> {
         for i in &node.items {
             self.gen(i);
         }
+    }
+
+    fn if_(&mut self, node: &ast::If, _loc: usize) {
+        let elsel = self.next_label();
+        let endl = self.next_label();
+
+        self.gen(&node.cond);
+        o!(self.f, "	cmp	$0, %eax");
+        o!(self.f, "	je	.Lelse{elsel}");
+
+        self.gen(&node.then);
+        o!(self.f, "	jmp	.Lend{endl}");
+
+        o!(self.f, ".Lelse{elsel}:");
+        if let Some(else_) = &node.else_ {
+            self.gen(else_);
+        }
+        o!(self.f, ".Lend{endl}:");
     }
 
     fn decl(&mut self, node: &ast::Decl, _loc: usize) {
@@ -164,6 +185,10 @@ impl<'a> Gen<'a> {
             _ => unreachable!("{:?}", node.op),
         }
         o!(self.f, "	movzb	%al, %eax");
+    }
+
+    fn next_label(&mut self) -> usize {
+        self.label_cnt.next().unwrap()
     }
 
     fn err(&self, loc: usize, msg: &str) -> ! {

@@ -28,6 +28,8 @@ pub(crate) enum TokenKind {
     Semi,      // `;`
     Eq,        // `=`
 
+    If,
+    Else,
     Int,
     Return,
 
@@ -61,6 +63,8 @@ impl std::fmt::Display for TokenKind {
             Semi => write!(f, ";"),
             Eq => write!(f, "="),
 
+            If => write!(f, "if"),
+            Else => write!(f, "else"),
             Int => write!(f, "int"),
             Return => write!(f, "return"),
 
@@ -189,6 +193,8 @@ impl<'a> Scanner<'a> {
     fn ident(&mut self) -> Token {
         let s = self.read_ident();
         match s.as_str() {
+            "if" => Token { kind: TokenKind::If, loc: self.loc },
+            "else" => Token { kind: TokenKind::Else, loc: self.loc },
             "int" => Token { kind: TokenKind::Int, loc: self.loc },
             "return" => Token { kind: TokenKind::Return, loc: self.loc },
             _ => Token { kind: TokenKind::Ident(s), loc: self.loc },

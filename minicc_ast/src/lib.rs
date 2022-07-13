@@ -7,6 +7,7 @@ pub struct Ast {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AstKind {
     CompoundStmt(CompoundStmt),
+    If(If),
     Decl(Decl),
     Return(Return),
     Ref(Ref),
@@ -18,6 +19,13 @@ pub enum AstKind {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CompoundStmt {
     pub items: Vec<Ast>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct If {
+    pub cond: Box<Ast>,
+    pub then: Box<Ast>,
+    pub else_: Option<Box<Ast>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
