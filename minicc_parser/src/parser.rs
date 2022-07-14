@@ -286,6 +286,10 @@ impl<'a> Parser<'a> {
                 self.next();
                 self.if_()
             }
+            TokenKind::For => {
+                self.next();
+                self.for_()
+            }
             TokenKind::Dbg => {
                 self.next();
                 self.skip(&TokenKind::LParen);
@@ -352,6 +356,53 @@ impl<'a> Parser<'a> {
                 cond: Box::new(cond),
                 then: Box::new(then),
                 else_,
+            }),
+            loc,
+        }
+    }
+
+    /// ```ebnf
+    /// for_ := "(" assign? ";" assign? ";" assign? ")" stmt
+    /// ```
+    fn for_(&mut self) -> Ast {
+        let loc = self.peek().loc;
+
+        self.skip(&TokenKind::LParen);
+        let init = if self.peek().kind == TokenKind::Semi {
+            self.next();
+            None
+        } else {
+            let init = Some(Box::new(self.assign()));
+            self.skip(&TokenKind::Semi);
+            init
+        };
+
+        let cond = if self.peek().kind == TokenKind::Semi {
+            self.next();
+            None
+        } else {
+            let cond = Some(Box::new(self.assign()));
+            self.skip(&TokenKind::Semi);
+            cond
+        };
+
+        let inc = if self.peek().kind == TokenKind::RParen {
+            self.next();
+            None
+        } else {
+            let inc = Some(Box::new(self.assign()));
+            self.skip(&TokenKind::RParen);
+            inc
+        };
+
+        let body = self.stmt();
+
+        Ast {
+            kind: AstKind::For(ast::For {
+                init,
+                cond,
+                inc,
+                body: Box::new(body),
             }),
             loc,
         }

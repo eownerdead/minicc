@@ -8,6 +8,7 @@ pub struct Ast {
 pub enum AstKind {
     CompoundStmt(CompoundStmt),
     If(If),
+    For(For),
     Decl(Decl),
     Return(Return),
     Dbg(Dbg),
@@ -27,6 +28,14 @@ pub struct If {
     pub cond: Box<Ast>,
     pub then: Box<Ast>,
     pub else_: Option<Box<Ast>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct For {
+    pub init: Option<Box<Ast>>,
+    pub cond: Option<Box<Ast>>,
+    pub inc: Option<Box<Ast>>,
+    pub body: Box<Ast>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

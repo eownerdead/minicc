@@ -56,6 +56,7 @@ impl<'a> Gen<'a> {
         match &node.kind {
             CompoundStmt(n) => self.compound_stmt(n, node.loc),
             If(n) => self.if_(n, node.loc),
+            For(n) => self.for_(n, node.loc),
             Decl(n) => self.decl(n, node.loc),
             Return(n) => self.return_(n, node.loc),
             Dbg(n) => self.dbg(n, node.loc),
@@ -87,6 +88,27 @@ impl<'a> Gen<'a> {
         if let Some(else_) = &node.else_ {
             self.gen(else_);
         }
+        o!(self.f, ".Lend{endl}:");
+    }
+
+    fn for_(&mut self, node: &ast::For, _loc: usize) {
+        let beginl = self.next_label();
+        let endl = self.next_label();
+
+        if let Some(init) = &node.init {
+            self.gen(init);
+        }
+        o!(self.f, ".Lbegin{beginl}:");
+        if let Some(cond) = &node.cond {
+            self.gen(cond);
+            o!(self.f, "	cmp	$0, %eax");
+            o!(self.f, "	je	.Lend{endl}");
+        }
+        self.gen(&node.body);
+        if let Some(inc) = &node.inc {
+            self.gen(inc);
+        }
+        o!(self.f, "	jmp	.Lbegin{beginl}");
         o!(self.f, ".Lend{endl}:");
     }
 

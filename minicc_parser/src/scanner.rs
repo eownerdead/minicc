@@ -30,6 +30,7 @@ pub(crate) enum TokenKind {
 
     If,
     Else,
+    For,
     Int,
     Return,
     Dbg,
@@ -66,6 +67,7 @@ impl std::fmt::Display for TokenKind {
 
             If => write!(f, "if"),
             Else => write!(f, "else"),
+            For => write!(f, "for"),
             Int => write!(f, "int"),
             Return => write!(f, "return"),
             Dbg => write!(f, "dbg"),
@@ -197,6 +199,7 @@ impl<'a> Scanner<'a> {
         match s.as_str() {
             "if" => Token { kind: TokenKind::If, loc: self.loc },
             "else" => Token { kind: TokenKind::Else, loc: self.loc },
+            "for" => Token { kind: TokenKind::For, loc: self.loc },
             "int" => Token { kind: TokenKind::Int, loc: self.loc },
             "return" => Token { kind: TokenKind::Return, loc: self.loc },
             "dbg" => Token { kind: TokenKind::Dbg, loc: self.loc },
