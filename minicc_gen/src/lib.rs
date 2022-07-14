@@ -221,7 +221,7 @@ impl<'a> Gen<'a> {
     }
 
     fn err(&self, loc: usize, msg: &str) -> ! {
-        println!("{}: {}", loc, msg);
+        eprintln!("{}: {}", loc, msg);
         exit(1);
     }
 }

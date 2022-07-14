@@ -238,7 +238,7 @@ impl<'a> Scanner<'a> {
     }
 
     fn err(&self, msg: &str) -> ! {
-        println!("{pos}: {msg}", pos = self.loc);
+        eprintln!("{pos}: {msg}", pos = self.loc);
         exit(1);
     }
 

@@ -409,7 +409,7 @@ impl<'a> Parser<'a> {
     }
 
     fn err(&mut self, msg: &str) -> ! {
-        println!("{pos}: {msg}", pos = self.peek().loc);
+        eprintln!("{pos}: {msg}", pos = self.peek().loc);
         exit(1);
     }
 
