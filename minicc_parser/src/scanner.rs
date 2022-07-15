@@ -97,99 +97,95 @@ impl<'a> Iterator for Scanner<'a> {
             self.next_char();
         }
 
-        match self.peek_char() {
-            None => None,
+        let loc = self.loc;
+        let kind = match self.peek_char()? {
+            '+' => {
+                self.next_char();
+                TokenKind::Plus
+            }
+            '-' => {
+                self.next_char();
+                TokenKind::Minus
+            }
+            '*' => {
+                self.next_char();
+                TokenKind::Asterisk
+            }
+            '/' => {
+                self.next_char();
+                TokenKind::Slash
+            }
+            '%' => {
+                self.next_char();
+                TokenKind::Percent
+            }
+            '!' => {
+                self.next_char();
+                if let Some('=') = self.peek_char() {
+                    self.next_char();
+                    TokenKind::ExclaimEq
+                } else {
+                    TokenKind::Exclaim
+                }
+            }
+            '<' => {
+                self.next_char();
+                if let Some('=') = self.peek_char() {
+                    self.next_char();
+                    TokenKind::LtEq
+                } else {
+                    TokenKind::Lt
+                }
+            }
+            '>' => {
+                self.next_char();
+                if let Some('=') = self.peek_char() {
+                    self.next_char();
+                    TokenKind::GtEq
+                } else {
+                    TokenKind::Gt
+                }
+            }
+            '=' => {
+                self.next_char();
+                if let Some('=') = self.peek_char() {
+                    self.next_char();
+                    TokenKind::EqEq
+                } else {
+                    TokenKind::Eq
+                }
+            }
+            '(' => {
+                self.next_char();
+                TokenKind::LParen
+            }
+            ')' => {
+                self.next_char();
+                TokenKind::RParen
+            }
+            '{' => {
+                self.next_char();
+                TokenKind::LBrace
+            }
+            '}' => {
+                self.next_char();
+                TokenKind::RBrace
+            }
+            ';' => {
+                self.next_char();
+                TokenKind::Semi
+            }
+            ',' => {
+                self.next_char();
+                TokenKind::Comma
+            }
+            c if c.is_ascii_digit() => TokenKind::IntLit(self.read_int()),
+            c if c.is_ascii_alphabetic() => self.ident(),
 
-            Some('+') => {
-                self.next_char();
-                Some(Token { kind: TokenKind::Plus, loc: self.loc })
-            }
-            Some('-') => {
-                self.next_char();
-                Some(Token { kind: TokenKind::Minus, loc: self.loc })
-            }
-            Some('*') => {
-                self.next_char();
-                Some(Token { kind: TokenKind::Asterisk, loc: self.loc })
-            }
-            Some('/') => {
-                self.next_char();
-                Some(Token { kind: TokenKind::Slash, loc: self.loc })
-            }
-            Some('%') => {
-                self.next_char();
-                Some(Token { kind: TokenKind::Percent, loc: self.loc })
-            }
-            Some('!') => {
-                self.next_char();
-                if let Some('=') = self.peek_char() {
-                    self.next_char();
-                    Some(Token { kind: TokenKind::ExclaimEq, loc: self.loc })
-                } else {
-                    Some(Token { kind: TokenKind::Exclaim, loc: self.loc })
-                }
-            }
-            Some('<') => {
-                self.next_char();
-                if let Some('=') = self.peek_char() {
-                    self.next_char();
-                    Some(Token { kind: TokenKind::LtEq, loc: self.loc })
-                } else {
-                    Some(Token { kind: TokenKind::Lt, loc: self.loc })
-                }
-            }
-            Some('>') => {
-                self.next_char();
-                if let Some('=') = self.peek_char() {
-                    self.next_char();
-                    Some(Token { kind: TokenKind::GtEq, loc: self.loc })
-                } else {
-                    Some(Token { kind: TokenKind::Gt, loc: self.loc })
-                }
-            }
-            Some('=') => {
-                self.next_char();
-                if let Some('=') = self.peek_char() {
-                    self.next_char();
-                    Some(Token { kind: TokenKind::EqEq, loc: self.loc })
-                } else {
-                    Some(Token { kind: TokenKind::Eq, loc: self.loc })
-                }
-            }
-            Some('(') => {
-                self.next_char();
-                Some(Token { kind: TokenKind::LParen, loc: self.loc })
-            }
-            Some(')') => {
-                self.next_char();
-                Some(Token { kind: TokenKind::RParen, loc: self.loc })
-            }
-            Some('{') => {
-                self.next_char();
-                Some(Token { kind: TokenKind::LBrace, loc: self.loc })
-            }
-            Some('}') => {
-                self.next_char();
-                Some(Token { kind: TokenKind::RBrace, loc: self.loc })
-            }
-            Some(';') => {
-                self.next_char();
-                Some(Token { kind: TokenKind::Semi, loc: self.loc })
-            }
-            Some(',') => {
-                self.next_char();
-                Some(Token { kind: TokenKind::Comma, loc: self.loc })
-            }
-            Some(c) if c.is_ascii_digit() => {
-                Some(Token {
-                    kind: TokenKind::IntLit(self.read_int()),
-                    loc: self.loc,
-                })
-            }
-            Some(c) if c.is_ascii_alphabetic() => Some(self.ident()),
+            c => self.err(&format!("unknown token `{}`", c)),
+        };
 
-            Some(c) => self.err(&format!("unknown token `{}`", c)),
-        }
+        Some(Token { kind, loc })
     }
 }
 
@@ -198,15 +194,15 @@ impl<'a> Scanner<'a> {
         Self { s: src.chars(), loc: 0 }
     }
 
-    fn ident(&mut self) -> Token {
+    fn ident(&mut self) -> TokenKind {
         let s = self.read_ident();
         match s.as_str() {
-            "if" => Token { kind: TokenKind::If, loc: self.loc },
-            "else" => Token { kind: TokenKind::Else, loc: self.loc },
-            "for" => Token { kind: TokenKind::For, loc: self.loc },
-            "int" => Token { kind: TokenKind::Int, loc: self.loc },
-            "return" => Token { kind: TokenKind::Return, loc: self.loc },
-            _ => Token { kind: TokenKind::Ident(s), loc: self.loc },
+            "if" => TokenKind::If,
+            "else" => TokenKind::Else,
+            "for" => TokenKind::For,
+            "int" => TokenKind::Int,
+            "return" => TokenKind::Return,
+            _ => TokenKind::Ident(s),
         }
     }
 
