@@ -11,7 +11,7 @@ pub enum AstKind {
     For(For),
     Decl(Decl),
     Return(Return),
-    Dbg(Dbg),
+    Call(Call),
     Ref(Ref),
     IntLit(IntLit),
     UnOp(UnOp),
@@ -48,10 +48,10 @@ pub struct Return {
     pub expr: Box<Ast>,
 }
 
-// Ad hoc printf until implementing function.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Dbg {
-    pub expr: Box<Ast>,
+pub struct Call {
+    pub ident: String,
+    pub args: Vec<Ast>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

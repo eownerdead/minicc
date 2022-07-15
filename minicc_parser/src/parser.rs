@@ -23,20 +23,36 @@ impl<'a> Parser<'a> {
 
     /// ```ebnf
     /// primary ::= [0-9]+
-    ///           | [a-zA-Z][a-zA-Z0-9]*
+    ///           | [a-zA-Z][a-zA-Z0-9]* "(" arg_list? ")"
     ///           | "(" eq ")"
     /// ```
     fn primary(&mut self) -> Ast {
         let loc = self.peek().loc;
 
         match self.peek().kind.clone() {
-            TokenKind::IntLit(x) => {
+            TokenKind::IntLit(val) => {
                 self.next();
-                Ast { kind: AstKind::IntLit(ast::IntLit { val: x }), loc }
+                Ast { kind: AstKind::IntLit(ast::IntLit { val }), loc }
             }
-            TokenKind::Ident(i) => {
+            TokenKind::Ident(ident) => {
                 self.next();
-                Ast { kind: AstKind::Ref(ast::Ref { ident: i }), loc }
+
+                if self.peek().kind == TokenKind::LParen {
+                    self.next();
+
+                    let args = if self.peek().kind == TokenKind::RParen {
+                        self.next();
+                        Vec::new()
+                    } else {
+                        let args = self.arg_list();
+                        self.skip(&TokenKind::RParen);
+                        args
+                    };
+
+                    Ast { kind: AstKind::Call(ast::Call { ident, args }), loc }
+                } else {
+                    Ast { kind: AstKind::Ref(ast::Ref { ident }), loc }
+                }
             }
             TokenKind::LParen => {
                 self.next();
@@ -48,6 +64,18 @@ impl<'a> Parser<'a> {
                 self.err(&format!("expected expression, found `{kind}`"));
             }
         }
+    }
+
+    /// ```ebnf
+    /// arg_list ::= assign ("," assign)*
+    /// ```
+    fn arg_list(&mut self) -> Vec<Ast> {
+        let mut args = vec![self.assign()];
+        while self.peek().kind == TokenKind::Comma {
+            self.next();
+            args.push(self.assign());
+        }
+        args
     }
 
     /// ```ebnf
@@ -256,7 +284,6 @@ impl<'a> Parser<'a> {
     ///        | "int" decl ";"
     ///        | "return" assign ";"
     ///        | "if" if_
-    ///        | "dbg" "(" assign ")" ";"
     ///        | assign ";"
     /// ```
     fn stmt(&mut self) -> Ast {
@@ -289,18 +316,6 @@ impl<'a> Parser<'a> {
             TokenKind::For => {
                 self.next();
                 self.for_()
-            }
-            TokenKind::Dbg => {
-                self.next();
-                self.skip(&TokenKind::LParen);
-                let expr = self.assign();
-                self.skip(&TokenKind::RParen);
-                self.skip(&TokenKind::Semi);
-
-                Ast {
-                    kind: AstKind::Dbg(ast::Dbg { expr: Box::new(expr) }),
-                    loc,
-                }
             }
             _ => {
                 let node = self.assign();

@@ -27,13 +27,13 @@ pub(crate) enum TokenKind {
     RBrace,    // `}`
     Semi,      // `;`
     Eq,        // `=`
+    Comma,     // `,`
 
     If,
     Else,
     For,
     Int,
     Return,
-    Dbg,
 
     IntLit(i64), // Integer literals e.g. `123`
 
@@ -64,13 +64,13 @@ impl std::fmt::Display for TokenKind {
             RBrace => write!(f, "}}"),
             Semi => write!(f, ";"),
             Eq => write!(f, "="),
+            Comma => write!(f, ","),
 
             If => write!(f, "if"),
             Else => write!(f, "else"),
             For => write!(f, "for"),
             Int => write!(f, "int"),
             Return => write!(f, "return"),
-            Dbg => write!(f, "dbg"),
 
             IntLit(x) => write!(f, "{}", x),
 
@@ -176,6 +176,10 @@ impl<'a> Iterator for Scanner<'a> {
                 self.next_char();
                 Some(Token { kind: TokenKind::Semi, loc: self.loc })
             }
+            Some(',') => {
+                self.next_char();
+                Some(Token { kind: TokenKind::Comma, loc: self.loc })
+            }
             Some(c) if c.is_ascii_digit() => {
                 Some(Token {
                     kind: TokenKind::IntLit(self.read_int()),
@@ -202,7 +206,6 @@ impl<'a> Scanner<'a> {
             "for" => Token { kind: TokenKind::For, loc: self.loc },
             "int" => Token { kind: TokenKind::Int, loc: self.loc },
             "return" => Token { kind: TokenKind::Return, loc: self.loc },
-            "dbg" => Token { kind: TokenKind::Dbg, loc: self.loc },
             _ => Token { kind: TokenKind::Ident(s), loc: self.loc },
         }
     }
