@@ -16,9 +16,12 @@ impl<'a> Parser<'a> {
         Self { scanner: scanner.peekable() }
     }
 
-    pub fn parse(&mut self) -> Ast {
-        self.skip(&TokenKind::LBrace);
-        self.compound_stmt()
+    pub fn parse(&mut self) -> Vec<Ast> {
+        let mut fns = Vec::new();
+        while self.peek().kind != TokenKind::Eof {
+            fns.push(self.fn_());
+        }
+        fns
     }
 
     /// ```ebnf
@@ -273,9 +276,34 @@ impl<'a> Parser<'a> {
         let loc = self.peek().loc;
         if let TokenKind::Ident(i) = self.peek().kind.clone() {
             self.next();
-            Ast { kind: AstKind::Decl(ast::Decl { ident: i }), loc }
+            Ast { kind: AstKind::VarDecl(ast::VarDecl { ident: i }), loc }
         } else {
             self.err("expected identifier")
+        }
+    }
+
+    /// ```ebnf
+    /// param_ty_list ::= param_decl ("," param_decl)*
+    /// ```
+    fn param_ty_list(&mut self) -> Vec<String> {
+        let mut params = vec![self.param_decl()];
+        while self.peek().kind == TokenKind::Comma {
+            self.next();
+            params.push(self.param_decl());
+        }
+        params
+    }
+
+    /// ```ebnf
+    /// param_decl ::= "int" [a-zA-Z][a-zA-Z0-9]*
+    /// ```
+    fn param_decl(&mut self) -> String {
+        self.skip(&TokenKind::Int);
+        if let TokenKind::Ident(ident) = self.peek().kind.clone() {
+            self.next();
+            ident
+        } else {
+            self.err("expected identifier");
         }
     }
 
@@ -417,6 +445,42 @@ impl<'a> Parser<'a> {
                 init,
                 cond,
                 inc,
+                body: Box::new(body),
+            }),
+            loc,
+        }
+    }
+
+    fn fn_(&mut self) -> Ast {
+        let loc = self.peek().loc;
+
+        self.skip(&TokenKind::Int);
+
+        let kind = self.peek().kind.clone();
+        let ident = if let TokenKind::Ident(ident) = kind {
+            self.next();
+            ident
+        } else {
+            self.err(&format!("expected identifier, found `{}`", kind))
+        };
+
+        self.skip(&TokenKind::LParen);
+        let params = if self.peek().kind == TokenKind::RParen {
+            self.next();
+            Vec::new()
+        } else {
+            let params = self.param_ty_list();
+            self.skip(&TokenKind::RParen);
+            params
+        };
+
+        self.skip(&TokenKind::LBrace);
+        let body = self.compound_stmt();
+
+        Ast {
+            kind: AstKind::FnDecl(ast::FnDecl {
+                ident,
+                params,
                 body: Box::new(body),
             }),
             loc,

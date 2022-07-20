@@ -14,57 +14,72 @@ macro_rules! o {
     };
 }
 
-pub fn gen(f: &mut dyn Write, node: &ast::Ast) {
-    let mut g = Gen { f, label_cnt: 0.., offset: 0, vars: Default::default() };
-    g.prologue();
-    g.gen(node);
-    g.epilogue();
+pub fn gen(f: &mut dyn Write, nodes: &[ast::Ast]) {
+    let mut g = Gen { f, label_cnt: 0.., curr_fn: Fn::new("".to_string()) };
+    for i in nodes {
+        g.gen(i);
+    }
 }
 
 struct Gen<'a> {
     pub f: &'a mut dyn Write,
     pub label_cnt: RangeFrom<usize>,
-    pub offset: usize,
-    pub vars: HashMap<String, usize>,
+    pub curr_fn: Fn,
+}
+
+struct Fn {
+    pub ident: String,
+    pub offset: isize,
+    pub vars: HashMap<String, isize>,
+}
+
+impl Fn {
+    fn new(ident: String) -> Self {
+        Self { ident, offset: 0, vars: HashMap::new() }
+    }
 }
 
 impl<'a> Gen<'a> {
-    fn prologue(&mut self) {
-        o!(self.f, "	.text");
-        o!(self.f, ".Lmain:");
-    }
-
-    fn epilogue(&mut self) {
-        // With out `return`, 0 should be returned.
-        o!(self.f, "	mov	$0, %eax");
-        o!(self.f, ".Lret:");
-        o!(self.f, "	mov	%ebp, %esp");
-        o!(self.f, "	pop	%ebp");
-        o!(self.f, "	ret");
-        o!(self.f);
-        o!(self.f, "	.globl	main");
-        o!(self.f, "	.type	main,@function");
-        o!(self.f, "main:");
-        o!(self.f, "	push	%ebp");
-        o!(self.f, "	mov	%esp, %ebp");
-        o!(self.f, "	sub	${}, %esp", self.offset);
-        o!(self.f, "	jmp	.Lmain");
-    }
-
     fn gen(&mut self, node: &ast::Ast) {
         use ast::AstKind::*;
         match &node.kind {
+            FnDecl(n) => self.fn_decl(n, node.loc),
             CompoundStmt(n) => self.compound_stmt(n, node.loc),
             If(n) => self.if_(n, node.loc),
             For(n) => self.for_(n, node.loc),
             Call(n) => self.call(n, node.loc),
-            Decl(n) => self.decl(n, node.loc),
+            VarDecl(n) => self.var_decl(n, node.loc),
             Return(n) => self.return_(n, node.loc),
             Ref(n) => self.ref_(n, node.loc),
             IntLit(n) => self.int_lit(n, node.loc),
             UnOp(n) => self.un_op(n, node.loc),
             BinOp(n) => self.bin_op(n, node.loc),
         }
+    }
+
+    fn fn_decl(&mut self, node: &ast::FnDecl, _loc: usize) {
+        self.curr_fn = Fn::new(node.ident.clone());
+
+        for (i, ident) in node.params.iter().enumerate() {
+            self.curr_fn.vars.insert(ident.clone(), 4 * (i as isize + 2));
+        }
+
+        o!(self.f, "	.text");
+        o!(self.f, ".L{}:", self.curr_fn.ident);
+        self.gen(&node.body);
+
+        o!(self.f, ".Lret{}:", self.curr_fn.ident);
+        o!(self.f, "	mov	%ebp, %esp");
+        o!(self.f, "	pop	%ebp");
+        o!(self.f, "	ret");
+        o!(self.f);
+        o!(self.f, "	.globl	{}", self.curr_fn.ident);
+        o!(self.f, "	.type	{},@function", self.curr_fn.ident);
+        o!(self.f, "{}:", self.curr_fn.ident);
+        o!(self.f, "	push	%ebp");
+        o!(self.f, "	mov	%esp, %ebp");
+        o!(self.f, "	add	${}, %esp", self.curr_fn.offset);
+        o!(self.f, "	jmp	.L{}", self.curr_fn.ident);
     }
 
     fn compound_stmt(&mut self, node: &ast::CompoundStmt, _loc: usize) {
@@ -121,19 +136,19 @@ impl<'a> Gen<'a> {
         o!(self.f, "	add	${}, %esp", node.args.len() * 4);
     }
 
-    fn decl(&mut self, node: &ast::Decl, _loc: usize) {
-        self.offset += 4;
-        self.vars.insert(node.ident.clone(), self.offset);
+    fn var_decl(&mut self, node: &ast::VarDecl, _loc: usize) {
+        self.curr_fn.offset += -4;
+        self.curr_fn.vars.insert(node.ident.clone(), self.curr_fn.offset);
     }
 
     fn return_(&mut self, node: &ast::Return, _loc: usize) {
         self.gen(&node.expr);
-        o!(self.f, "	jmp	.Lret");
+        o!(self.f, "	jmp	.Lret{}", self.curr_fn.ident);
     }
 
     fn ref_(&mut self, node: &ast::Ref, loc: usize) {
-        if let Some(offset) = self.vars.get(&node.ident) {
-            o!(self.f, "	mov	-{}(%ebp), %eax", offset);
+        if let Some(offset) = self.curr_fn.vars.get(&node.ident) {
+            o!(self.f, "	mov	{}(%ebp), %eax", offset);
         } else {
             self.err(loc, &format!("cannot find value `{}`", node.ident));
         }
@@ -163,8 +178,8 @@ impl<'a> Gen<'a> {
             self.gen(&node.rhs);
 
             if let ast::AstKind::Ref(l) = &node.lhs.kind {
-                if let Some(offset) = self.vars.get(&l.ident) {
-                    o!(self.f, "	mov	%eax, -{}(%ebp)", offset)
+                if let Some(offset) = self.curr_fn.vars.get(&l.ident) {
+                    o!(self.f, "	mov	%eax, {}(%ebp)", offset)
                 } else {
                     self.err(loc, &format!("cannot find value `{}`", l.ident))
                 }

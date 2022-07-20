@@ -6,16 +6,24 @@ pub struct Ast {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AstKind {
+    FnDecl(FnDecl),
     CompoundStmt(CompoundStmt),
     If(If),
     For(For),
-    Decl(Decl),
+    VarDecl(VarDecl),
     Return(Return),
     Call(Call),
     Ref(Ref),
     IntLit(IntLit),
     UnOp(UnOp),
     BinOp(BinOp),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FnDecl {
+    pub ident: String,
+    pub params: Vec<String>,
+    pub body: Box<Ast>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -39,7 +47,7 @@ pub struct For {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Decl {
+pub struct VarDecl {
     pub ident: String,
 }
 

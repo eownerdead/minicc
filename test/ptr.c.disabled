@@ -1,0 +1,9 @@
+{
+    int a; a = 42;
+    int p; p = &a;
+    dbg(*p);
+    a = 99;
+    dbg(*p);
+    *p = 5;
+    dbg(a);
+}
