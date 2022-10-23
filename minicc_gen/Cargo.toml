@@ -7,3 +7,4 @@ edition = "2021"
 
 [dependencies]
 minicc_ast = { path = "../minicc_ast" }
+minicc_ir = { path = "../minicc_ir" }

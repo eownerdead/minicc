@@ -3,7 +3,9 @@ use std::io::Write;
 use std::ops::RangeFrom;
 use std::process::exit;
 
-use minicc_ast as ast;
+use ir::{dom, regalloc};
+
+use {minicc_ast as ast, minicc_ir as ir};
 
 macro_rules! o {
     ($dst:expr) => {
@@ -15,22 +17,44 @@ macro_rules! o {
 }
 
 pub fn gen(f: &mut dyn Write, nodes: &[ast::Ast]) {
-    let mut g = Gen { f, label_cnt: 0.., curr_fn: Fn::new("".to_string()) };
+    let builder = ir::Builder::new();
+    let mut g =
+        Gen { f, label_cnt: 0.., curr_fn: Fn::new("".to_string()), builder };
+
     for i in nodes {
         g.gen(i);
     }
+
+    let mut f = g.builder.mod_.funcs["main"].clone();
+
+    //println!("original");
+    println!("{f}");
+    let preds = ir::pred::pred_blocks(&f);
+    let doms = ir::dom::dom(&f, &preds);
+    let dom_fr = ir::dom::dom_frontier(&f, &preds, &doms);
+    //ir::to2addr(&mut f);
+    ir::mem2reg::mem2reg(&mut f, &dom_fr);
+    println!("mem2reg");
+    println!("{f}");
+    ir::sccp::sccp(&mut f);
+    println!("sccp");
+    println!("{f}");
+    //regalloc(&mut f);
+    //println!("{f}");
+    ir::gen::GenAmd64.emit(f);
 }
 
 struct Gen<'a> {
     pub f: &'a mut dyn Write,
     pub label_cnt: RangeFrom<usize>,
     pub curr_fn: Fn,
+    pub builder: ir::Builder,
 }
 
 struct Fn {
     pub ident: String,
     pub offset: isize,
-    pub vars: HashMap<String, isize>,
+    pub vars: HashMap<String, ir::Var>,
 }
 
 impl Fn {
@@ -40,7 +64,7 @@ impl Fn {
 }
 
 impl<'a> Gen<'a> {
-    fn gen(&mut self, node: &ast::Ast) {
+    fn gen(&mut self, node: &ast::Ast) -> Option<ir::Operand> {
         use ast::AstKind::*;
         match &node.kind {
             FnDecl(n) => self.fn_decl(n, node.loc),
@@ -57,56 +81,58 @@ impl<'a> Gen<'a> {
         }
     }
 
-    fn fn_decl(&mut self, node: &ast::FnDecl, _loc: usize) {
+    fn fn_decl(
+        &mut self,
+        node: &ast::FnDecl,
+        _loc: usize,
+    ) -> Option<ir::Operand> {
         self.curr_fn = Fn::new(node.ident.clone());
+        self.builder.move_to_new_func("main".to_string());
+        self.builder.move_to_new_block();
 
-        for (i, ident) in node.params.iter().enumerate() {
-            self.curr_fn.vars.insert(ident.clone(), 4 * (i as isize + 2));
-        }
+        // for (i, ident) in node.params.iter().enumerate() {
+        // self.curr_fn.vars.insert(ident.clone(), 4 * (i as isize + 2));
+        // }
 
-        o!(self.f, "	.text");
-        o!(self.f, ".L{}:", self.curr_fn.ident);
         self.gen(&node.body);
-
-        o!(self.f, ".Lret{}:", self.curr_fn.ident);
-        o!(self.f, "	mov	%ebp, %esp");
-        o!(self.f, "	pop	%ebp");
-        o!(self.f, "	ret");
-        o!(self.f);
-        o!(self.f, "	.globl	{}", self.curr_fn.ident);
-        o!(self.f, "	.type	{},@function", self.curr_fn.ident);
-        o!(self.f, "{}:", self.curr_fn.ident);
-        o!(self.f, "	push	%ebp");
-        o!(self.f, "	mov	%esp, %ebp");
-        o!(self.f, "	add	${}, %esp", self.curr_fn.offset);
-        o!(self.f, "	jmp	.L{}", self.curr_fn.ident);
+        self.builder.push_inst(ir::Inst::Ret { op1: ir::Operand::Const(0) });
+        None
     }
 
-    fn compound_stmt(&mut self, node: &ast::CompoundStmt, _loc: usize) {
+    fn compound_stmt(
+        &mut self,
+        node: &ast::CompoundStmt,
+        _loc: usize,
+    ) -> Option<ir::Operand> {
         for i in &node.items {
             self.gen(i);
         }
+        None
     }
 
-    fn if_(&mut self, node: &ast::If, _loc: usize) {
-        let elsel = self.next_label();
-        let endl = self.next_label();
+    fn if_(&mut self, node: &ast::If, _loc: usize) -> Option<ir::Operand> {
+        let then = self.builder.new_block();
+        let else_ = self.builder.new_block();
+        let end = self.builder.new_block();
 
-        self.gen(&node.cond);
-        o!(self.f, "	cmp	$0, %eax");
-        o!(self.f, "	je	.Lelse{elsel}");
+        let op1 = self.gen(&node.cond).unwrap();
+        self.builder.push_inst(ir::Inst::Cond { op1, then, else_ });
 
+        self.builder.move_to_block(then);
         self.gen(&node.then);
-        o!(self.f, "	jmp	.Lend{endl}");
+        self.builder.push_inst(ir::Inst::Jmp { label: end });
 
-        o!(self.f, ".Lelse{elsel}:");
+        self.builder.move_to_block(else_);
         if let Some(else_) = &node.else_ {
             self.gen(else_);
         }
-        o!(self.f, ".Lend{endl}:");
+        self.builder.push_inst(ir::Inst::Jmp { label: end });
+        self.builder.move_to_block(end);
+
+        None
     }
 
-    fn for_(&mut self, node: &ast::For, _loc: usize) {
+    fn for_(&mut self, node: &ast::For, _loc: usize) -> Option<ir::Operand> {
         let beginl = self.next_label();
         let endl = self.next_label();
 
@@ -125,40 +151,66 @@ impl<'a> Gen<'a> {
         }
         o!(self.f, "	jmp	.Lbegin{beginl}");
         o!(self.f, ".Lend{endl}:");
+        None
     }
 
-    fn call(&mut self, node: &ast::Call, _loc: usize) {
+    fn call(&mut self, node: &ast::Call, _loc: usize) -> Option<ir::Operand> {
         for i in node.args.iter().rev() {
             self.gen(i);
             o!(self.f, "	push	%eax");
         }
         o!(self.f, "	call	{}", node.ident);
         o!(self.f, "	add	${}, %esp", node.args.len() * 4);
+        todo!()
     }
 
-    fn var_decl(&mut self, node: &ast::VarDecl, _loc: usize) {
-        self.curr_fn.offset += -4;
-        self.curr_fn.vars.insert(node.ident.clone(), self.curr_fn.offset);
+    fn var_decl(
+        &mut self,
+        node: &ast::VarDecl,
+        loc: usize,
+    ) -> Option<ir::Operand> {
+        let dist = self.builder.new_var();
+        self.builder.push_inst(ir::Inst::Alloca { dist });
+        if self.curr_fn.vars.insert(node.ident.clone(), dist).is_some() {
+            self.err(
+                loc,
+                &format!(
+                    "the variable `{}` is declared multiple times in the same \
+                     function.",
+                    node.ident
+                ),
+            )
+        }
+        None
     }
 
-    fn return_(&mut self, node: &ast::Return, _loc: usize) {
-        self.gen(&node.expr);
-        o!(self.f, "	jmp	.Lret{}", self.curr_fn.ident);
+    fn return_(
+        &mut self,
+        node: &ast::Return,
+        _loc: usize,
+    ) -> Option<ir::Operand> {
+        let op1 = self.gen(&node.expr).unwrap();
+        self.builder.push_inst(ir::Inst::Ret { op1 });
+        None
     }
 
-    fn ref_(&mut self, node: &ast::Ref, loc: usize) {
-        if let Some(offset) = self.curr_fn.vars.get(&node.ident) {
-            o!(self.f, "	mov	{}(%ebp), %eax", offset);
+    fn ref_(&mut self, node: &ast::Ref, loc: usize) -> Option<ir::Operand> {
+        if let Some(&offset) = self.curr_fn.vars.get(&node.ident) {
+            Some(offset.into())
         } else {
             self.err(loc, &format!("cannot find value `{}`", node.ident));
         }
     }
 
-    fn int_lit(&mut self, node: &ast::IntLit, _loc: usize) {
-        o!(self.f, "	mov	${}, %eax", node.val);
+    fn int_lit(
+        &mut self,
+        node: &ast::IntLit,
+        _loc: usize,
+    ) -> Option<ir::Operand> {
+        Some(ir::Operand::Const(node.val))
     }
 
-    fn un_op(&mut self, node: &ast::UnOp, _loc: usize) {
+    fn un_op(&mut self, node: &ast::UnOp, _loc: usize) -> Option<ir::Operand> {
         self.gen(&node.expr);
 
         match node.op {
@@ -171,67 +223,42 @@ impl<'a> Gen<'a> {
                 o!(self.f, "	movzb	%al, %eax");
             }
         }
+        todo!()
     }
 
-    fn bin_op(&mut self, node: &ast::BinOp, loc: usize) {
+    fn bin_op(
+        &mut self,
+        node: &ast::BinOp,
+        _loc: usize,
+    ) -> Option<ir::Operand> {
+        let op1 = self.gen(&node.lhs).unwrap();
+        let op2 = self.gen(&node.rhs).unwrap();
+
         if node.op == ast::OpBin::Asign {
-            self.gen(&node.rhs);
+            self.builder.push_inst(ir::Inst::Store { op1, op2 });
+            Some(op1)
+        } else {
+            let op = match node.op {
+                ast::OpBin::Add => ir::OpBin::Add,
+                ast::OpBin::Sub => ir::OpBin::Sub,
+                ast::OpBin::Mul => ir::OpBin::Mul,
+                ast::OpBin::Div => ir::OpBin::Div,
+                ast::OpBin::Mod => ir::OpBin::Mod,
+                ast::OpBin::Lt => ir::OpBin::Lt,
+                ast::OpBin::Gt => ir::OpBin::Gt,
+                ast::OpBin::Le => ir::OpBin::Le,
+                ast::OpBin::Ge => ir::OpBin::Ge,
+                ast::OpBin::Eq => ir::OpBin::Eq,
+                ast::OpBin::Ne => ir::OpBin::Ne,
+                ast::OpBin::Asign => unreachable!(),
+            };
 
-            if let ast::AstKind::Ref(l) = &node.lhs.kind {
-                if let Some(offset) = self.curr_fn.vars.get(&l.ident) {
-                    o!(self.f, "	mov	%eax, {}(%ebp)", offset)
-                } else {
-                    self.err(loc, &format!("cannot find value `{}`", l.ident))
-                }
-            } else {
-                self.err(loc, "expression is not assignable");
-            }
-            return;
+            let dist = self.builder.new_var();
+
+            self.builder.push_inst(ir::Inst::Bin { op, dist, op1, op2 });
+
+            Some(dist.into())
         }
-
-        self.gen(&node.rhs);
-        o!(self.f, "	push	%eax");
-        self.gen(&node.lhs);
-
-        o!(self.f, "	pop	%ecx");
-        match node.op {
-            ast::OpBin::Add => {
-                o!(self.f, "	add	%ecx, %eax");
-                return;
-            }
-            ast::OpBin::Sub => {
-                o!(self.f, "	sub	%ecx, %eax");
-                return;
-            }
-            ast::OpBin::Mul => {
-                o!(self.f, "	imul	%ecx, %eax");
-                return;
-            }
-            ast::OpBin::Div => {
-                o!(self.f, "	cltd");
-                o!(self.f, "	idiv	%ecx");
-                return;
-            }
-            ast::OpBin::Mod => {
-                o!(self.f, "	cltd");
-                o!(self.f, "	idiv	%ecx");
-                o!(self.f, "	mov	%edx, %eax");
-                return;
-            }
-            _ => {}
-        }
-
-        o!(self.f, "	cmp	%ecx, %eax");
-        match node.op {
-            ast::OpBin::Lt => o!(self.f, "	setl	%al"),
-            ast::OpBin::Gt => o!(self.f, "	setg	%al"),
-            ast::OpBin::Le => o!(self.f, "	setle	%al"),
-            ast::OpBin::Ge => o!(self.f, "	setge	%al"),
-            ast::OpBin::Eq => o!(self.f, "	sete	%al"),
-            ast::OpBin::Ne => o!(self.f, "	setne	%al"),
-            _ => unreachable!("{:?}", node.op),
-        }
-        o!(self.f, "	movzb	%al, %eax");
     }
 
     fn next_label(&mut self) -> usize {

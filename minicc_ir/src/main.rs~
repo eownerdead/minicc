@@ -1,0 +1,160 @@
+pub mod dom;
+pub mod inst;
+pub mod mem2reg;
+pub mod pred;
+pub mod regalloc;
+use std::collections::BTreeMap;
+
+pub use inst::{Block, BlockData, Func, Inst, OpBin, Operand, Var};
+use typed_index_collections::TiVec;
+
+/*
+fn main() {
+    let ir = Func {
+        blocks: vec![
+            (Block(0), BlockData {
+                insts: vec![Inst::Alloca { dist: Var(0) }, Inst::Cond {
+                    op1: Operand::Const(1),
+                    then: Block(1),
+                    else_: Block(2),
+                }],
+            }),
+            BlockData {
+                insts: vec![
+                    Inst::Store {
+                        op1: Operand::Var(Var(0)),
+                        op2: Operand::Const(5),
+                    },
+                    Inst::Jmp { label: Block(3) },
+                ],
+            },
+            BlockData {
+                insts: vec![
+                    Inst::Store {
+                        op1: Operand::Var(Var(0)),
+                        op2: Operand::Const(6),
+                    },
+                    Inst::Jmp { label: Block(3) },
+                ],
+            },
+            BlockData {
+                insts: vec![
+                    Inst::Load { dist: Var(2), op1: Operand::Var(Var(0)) },
+                    Inst::Ret { op1: Operand::Var(Var(2)) },
+                ],
+            },
+        ]),
+    };
+
+    // let preds = pred_blocks(&ir);
+    // let doms = crate::dom::dom(&ir, &preds);
+    // let dfs = crate::dom::dom_frontier(&ir, &preds, &doms);
+    // let ir = crate::mem2reg::mem2reg(ir, &dfs);
+    // crate::regalloc::liveness(&ir);
+    let mut g = GenAmd64::new();
+    g.emit(ir);
+}
+*/
+
+struct GenAmd64 {
+    // f: &'a mut dyn Write,
+    offset: isize,
+    vars: BTreeMap<Var, isize>,
+}
+
+impl GenAmd64 {
+    pub fn new(/*f: &'a mut dyn Write*/) -> Self {
+        Self { offset: -8, vars: BTreeMap::new() }
+    }
+
+    pub fn emit(&mut self, ir: Func) {
+        println!("	.text");
+        for (iblock, block) in ir.blocks {
+            println!(".L{}:", iblock.0);
+            for inst in &block.insts {
+                match &inst {
+                    Inst::Alloca { dist } => {
+                        self.new_var(*dist);
+                    }
+                    Inst::Store { op1, op2 } => self.emit_mov(*op2, *op1),
+                    Inst::Load { dist, op1 } => {
+                        self.new_var(*dist);
+                        self.emit_mov(*op1, Operand::Var(*dist))
+                    }
+                    Inst::BinOp { op, dist, op1, op2 } => {
+                        self.new_var(*dist);
+                        self.emit_mov(*op2, Operand::Var(*dist));
+                        match op {
+                            OpBin::Add => {
+                                println!(
+                                    "\tadd\t{}, {}",
+                                    self.fmt_operand(*op1),
+                                    self.fmt_operand(Operand::Var(*dist))
+                                )
+                            }
+                            _ => todo!(),
+                        }
+                    }
+                    Inst::Phi { dist: _, incomes: _ } => todo!(),
+                    Inst::Jmp { label } => println!("\tjmp\t.L{}", label.0),
+                    Inst::Cond { op1, then, else_ } => {
+                        if let Operand::Const(c) = op1 {
+                            println!("\tmov\t${c}, %rax");
+                            println!("\tcmp\t$0, %rax")
+                        } else {
+                            println!("\tcmpl\t$0, {}", self.fmt_operand(*op1));
+                        }
+                        println!("\tjne\t.L{}", then.0);
+                        println!("\tje\t.L{}", else_.0);
+                    }
+                    Inst::Ret { op1 } => {
+                        println!("\tmov\t{}, %rax", self.fmt_operand(*op1));
+                        println!("\tjmp\t.Lretmain");
+                    }
+                }
+            }
+        }
+
+        println!(".Lretmain:",);
+        println!("	mov	%rbp, %rsp");
+        println!("	pop	%rbp");
+        println!("	ret");
+        println!();
+        println!("	.globl	main");
+        println!("	.type	main, @function");
+        println!("main:");
+        println!("	push	%rbp");
+        println!("	mov	%rsp, %rbp");
+        println!("	add	${}, %rsp", self.offset);
+        println!("	jmp	.L0");
+    }
+
+    pub fn new_var(&mut self, v: Var) {
+        self.vars.insert(v, self.offset);
+        self.offset -= 8;
+    }
+
+    pub fn emit_mov(&self, src: Operand, dist: Operand) {
+        if let (Operand::Var(_), Operand::Var(_)) = (src, dist) {
+            println!("\tmovq\t{}, %rax", self.fmt_operand(src),);
+            println!("\tmovq\t%rax, {}", self.fmt_operand(dist));
+        } else {
+            println!(
+                "\tmovq\t{}, {}",
+                self.fmt_operand(src),
+                self.fmt_operand(dist)
+            );
+        }
+    }
+
+    pub fn fmt_operand(&self, operand: Operand) -> String {
+        match operand {
+            Operand::Var(v) => format!("{}(%rbp)", self.get_var_offset(v)),
+            Operand::Const(c) => format!("${c}"),
+        }
+    }
+
+    pub fn get_var_offset(&self, v: Var) -> isize {
+        *self.vars.get(&v).expect("{v} not found")
+    }
+}

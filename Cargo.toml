@@ -1,2 +1,2 @@
 [workspace]
-members = ["ccom", "minicc_ast", "minicc_parser", "minicc_gen"]
+members = ["ccom", "minicc_ast", "minicc_gen", "minicc_ir", "minicc_parser"]

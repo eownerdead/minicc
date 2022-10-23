@@ -1,0 +1,11 @@
+[package]
+name = "minicc_ir"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+
+[dependencies]
+itertools = "0.10.5"
+match_opt = "0.1.2"
+typed-index-collections = "3.0.3"

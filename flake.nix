@@ -27,9 +27,7 @@
               cargo
               clippy
               fenix.packages.${system}.default.rustfmt
-            ] ++ (with pkgs.pkgsi686Linux; [
-              gcc
-            ]);
+            ];
           };
         };
       }
